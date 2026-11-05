@@ -84,7 +84,8 @@ e quadranti, con limiti sul numero di tentativi. I risultati sono ridotti ai
 metadati utili e sottoposti a deduplicazione. STAC richiede un identificativo
 univoco all'interno della collezione: in una ricerca su più collezioni, il solo
 \texttt{id} non è quindi una chiave globalmente univoca \cite{stacSpec}.
-La chiave effettivamente usata dal client richiede riscontro nel codice.
+La deduplicazione della risposta non equivale al riconoscimento di tutte le
+scene relative alla stessa acquisizione fisica.
 
 \subsection{Sincronizzazione e risposta}
 
@@ -433,7 +434,7 @@ Search + GDACS + STAC &
 Eventi filtrati, contesto web e copertura delle acquisizioni. \\
 \addlinespace
 Dettagli EMSR884 &
-CEMS (+ Search/STAC opz.) &
+CEMS + Search/STAC &
 Attivazione e prodotti; arricchimento dashboard se abilitato. \\
 \addlinespace
 Grafico dei risultati &

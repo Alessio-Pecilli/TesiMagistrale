@@ -297,7 +297,8 @@ dipendenza CEMS--STAC descritta nel testo.}
 \label{fig:workflow-principale}
 \end{figure}
 
-Nel ramo operativo il router attiva solo un sottoinsieme delle fonti.
+Nel ramo operativo Search e Copernicus STAC costituiscono il piano di base;
+GDACS e CEMS lo integrano secondo la richiesta.
 LangGraph usa oggetti \texttt{Send} per creare un
 \texttt{source\_worker} per ogni sorgente selezionata. Search, GDACS e STAC
 possono quindi procedere contemporaneamente. Quando sono richiesti insieme
@@ -522,7 +523,9 @@ Discovery rank & No & Secondo regole fisse & Ordinamento \texttt{graph-score-v1}
 \addlinespace[1pt]
 Worker fonti & Ibrido & Esecuzione del piano & Recupero Search, GDACS, STAC e CEMS \\
 \addlinespace[1pt]
-Chart / Validator & No & No & Aggregazioni e riparazione viste \\
+Chart & Opzionale & Configurazione viste & Aggregazioni da record e rifinitura della vista \\
+\addlinespace[1pt]
+Validator & No & No & Controlli strutturali sulle viste \\
 \addlinespace[1pt]
 Conversation & Sì & Sì (sintesi/follow-up) & Composizione della risposta \\
 \bottomrule
@@ -637,9 +640,8 @@ Queste regole non sostituiscono la validazione semantica: prima di salvare una
 modifica, il Validator controlla l'allineamento di etichette, valori e serie.
 Un valore mancante e uno zero osservato hanno significati diversi: una
 riparazione di formato non deve essere interpretata come recupero del dato.
-La politica effettiva di esclusione, sostituzione o rifiuto dei valori non
-validi richiede riscontro nell'implementazione e nei test; la validazione del
-payload non costituisce da sola una garanzia di correttezza semantica.
+La validazione del payload è strutturale e non costituisce da sola una
+garanzia di correttezza semantica dei dati.
 Ogni grafico offre anche una tabella dei
 dati e l'esportazione CSV, così che il risultato visivo resti verificabile.
 
@@ -678,7 +680,7 @@ Il modello Ollama è raggiunto come dipendenza esterna. I server MCP sono
 visibili sulla rete interna; l'utente accede alla dashboard su
 \url{http://localhost:8080/dashboard} e, se attivato, al client legacy Open
 WebUI. Il backend dipende anche dal completamento dell'attivatore; le
-dipendenze usano health check e condizioni di avvio. Il profilo
+dipendenze usano condizioni di avvio e, per i servizi predisposti, health check. Il profilo
 \texttt{harvest} abilita job e schedulatori, mentre l'overlay
 \path{observability/docker-compose.observability.yml} aggiunge Prometheus,
 Grafana e Phoenix e avvia il backend con strumentazione. Liveness e readiness
@@ -694,12 +696,11 @@ fra il browser e la dashboard nativa.}
 
 \section{Sicurezza e osservabilità}
 
-Il sistema applica misure coerenti con un agente che usa fonti esterne e un
-workspace multiutente:
+Il prototipo prevede le seguenti misure per l'interfaccia e l'accesso alle
+fonti esterne:
 
 \begin{itemize}
-    \item accesso al workspace protetto da Keycloak (OIDC) con ruoli
-    applicativi;
+    \item accesso all'interfaccia tramite Keycloak (OIDC) con ruoli applicativi;
     \item credenziali e URL remoti forniti tramite variabili d'ambiente;
     \item validazione degli URL di dettaglio GDACS, limitati a host ufficiali;
     \item schemi Pydantic per rifiutare forme non valide (non la correttezza
@@ -711,12 +712,9 @@ workspace multiutente:
     \texttt{request\_id}/\texttt{thread\_id} e header diagnostici.
 \end{itemize}
 
-Un \texttt{thread\_id} distinto isola i checkpoint Redis per conversazione, ma
-non dimostra da solo l'autorizzazione dell'utente autenticato su ogni artefatto:
-tale garanzia richiede controlli di accesso espliciti oltre alla sola chiave di
-sessione. Analogamente, la ``riparazione'' di valori non numerici nelle viste
-serve a evitare grafici malformati; non autorizza a sostituire dati mancanti con
-zeri semanticamente falsi.
+Il prototipo è descritto nella configurazione di sviluppo: l'accesso OIDC
+all'interfaccia e la separazione dei checkpoint per conversazione non
+costituiscono una valutazione della sicurezza delle API in produzione.
 
 I log strutturati includono \texttt{request\_id}, \texttt{thread\_id},
 servizio, durata, codice di errore e possibilità di retry. Gli endpoint

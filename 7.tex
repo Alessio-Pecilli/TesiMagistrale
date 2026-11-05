@@ -6,8 +6,9 @@ capitolo descrive il \textbf{protocollo~6.0} implementato in
 \path{backend/app/evals/} (versione dichiarata in
 \path{dataset/schema.py}) e distingue i conteggi riportati per il dataset corrente dai risultati
 storici riscontrabili nella guida allegata. Gli artefatti originali delle run
-correnti non sono inclusi nei materiali di questa stesura: i conteggi possono
-essere controllati aritmeticamente, ma non ricostruiti caso per caso. Per confronto storico, in chiusura si richiamano anche
+correnti sono descritti dal rapporto di riscontro tecnico del 5 novembre
+2026, che documenta il controllo del JSON e del dataset; i file originali
+restano esterni ai materiali allegati \cite{riscontroTecnico2026}. Per confronto storico, in chiusura si richiamano anche
 le run parziali con protocollo~4.0 documentate nella guida del 15 ottobre 2026
 \cite{guidaProgetto2026}; i due insiemi non sono direttamente sommabili perché
 differiscono per protocollo, hash del dataset e regole di esito.
@@ -274,8 +275,8 @@ il rapporto tra \texttt{core\_ids} recuperati e \texttt{core\_ids} attesi,
 quando l'insieme atteso non è vuoto. La quota sul luogo usa invece al
 denominatore i prodotti recuperati. Con insiemi vuoti la convenzione deve
 essere dichiarata; una media dei rapporti per caso e un rapporto dei totali
-non sono intercambiabili. I denominatori effettivi e la gestione delle
-esclusioni restano da riscontrare negli artefatti del benchmark.
+non sono intercambiabili. Nel riepilogo corrente i tre casi STAC con riferimento vuoto sono esclusi
+dalle metriche di recupero, ma inclusi nella classificazione degli esiti.
 
 \section{Confronti e ripetizioni}
 
@@ -312,13 +313,12 @@ un cambiamento a una modifica è utile un confronto A/A della stessa versione.
 Per il dataset descritto da 105 casi, il riepilogo utilizzato nella stesura
 attribuisce alla run \texttt{eval-run-ca004ba5} i conteggi della
 Tabella~\ref{tab:risultati-6}, con protocollo~6.0, Judge \texttt{gemma3:27b},
-temperatura zero e seed 40. Sono risultati riportati, non una nuova esecuzione.
-Il file JSON della run, il dataset con il relativo hash e la revisione del
-codice non sono allegati; la guida del 15 ottobre documenta invece run del
-protocollo~4.0. Non è quindi possibile usare quella guida come prova dei
-conteggi correnti o della selezione di questa run rispetto ad altre.
-La tabella conserva il riepilogo distinguendo il controllo dei calcoli dalla
-verifica sperimentale, che richiede gli artefatti originali.
+temperatura zero e seed 40. Il rapporto tecnico del 5 novembre documenta
+il riscontro dei conteggi sul JSON originale e il ricalcolo del bootstrap
+con 2.000 ricampionamenti e seed 42 \cite{riscontroTecnico2026}.
+Il seed del bootstrap riguarda il ricampionamento, quello della run
+l'esecuzione del benchmark. Il rapporto costituisce la fonte di riscontro;
+non si tratta di una nuova esecuzione svolta per questa revisione.
 
 \begin{table}[htbp]
 \centering
@@ -336,8 +336,8 @@ Grafo & 31/49 (63,3\%) & 31/51 (60,8\%) & 49,3--75,3\% & 43,8--81,8\% \\
 Acquisizioni & 54/54 (100\%) & 54/54 (100\%) & 93,4--100\% & 100--100\% \\
 \bottomrule
 \end{tabularx}
-\caption{Conteggi riportati per la run \texttt{eval-run-ca004ba5}, da
-riscontrare sugli artefatti originali. Il tasso primario esclude i due
+\caption{Conteggi della run \texttt{eval-run-ca004ba5}, riscontrati nel rapporto
+tecnico \cite{riscontroTecnico2026}. Il tasso primario esclude i due
 \texttt{review} del grafo; il rigoroso li include nel denominatore. Wilson sui
 casi valutabili non incorpora la dipendenza fra famiglie; il bootstrap al
 100\% sulle acquisizioni è degenerato (nessun fallimento da ricampionare).}
@@ -346,22 +346,22 @@ casi valutabili non incorpora la dipendenza fra famiglie; il bootstrap al
 
 La differenza tra i due tassi del grafo dipende dai due casi indicati come
 \texttt{review}: il primario esclude questi casi, il rigoroso li include.
-L'intervallo Wilson è ricalcolabile dai conteggi; il bootstrap riportato non
-è ricostruibile senza famiglie, esiti individuali e configurazione.
+L'intervallo Wilson è ricalcolabile dai conteggi; il rapporto tecnico
+conferma anche gli intervalli bootstrap riportati.
 
-Per analizzare i fallimenti è necessario distinguere almeno quattro cause:
-instradamento errato, mancato recupero del riferimento, esclusione nel ranking
-e risposta finale incompleta o non fedele. Una risorsa alternativa corretta
-richiede inoltre una valutazione distinta dall'assenza del target previsto.
-La distribuzione di queste cause non viene quantificata in assenza della
-traccia originale: la sola presenza di 18 fail non ne identifica l'origine.
+Il riscontro distingue 18 fallimenti del grafo: otto con riferimento assente
+dalla lista, quattro con errore di percorso e mancato recupero, quattro con
+riferimento citato ma voti insufficienti e due con lista vuota. I due casi
+\texttt{review} restano separati dai fallimenti.
+Sui 49 casi valutabili, hit e citazione raggiungono il 71,4\%, hit@1 il
+18,4\% e MRR 0,295. Per le acquisizioni, esclusi i tre casi con riferimento
+vuoto, il recupero completo dei \texttt{core\_ids} è 94,1\% su 51 casi e il
+richiamo medio è 97,4\% \cite{riscontroTecnico2026}.
 
-Hit, hit@1, MRR, citazione e recupero dei \texttt{core\_ids} devono essere
-ricostruiti sulla stessa popolazione di casi, dichiarando esclusioni e
-riferimenti. La precisione geografica e il richiamo hanno significati diversi:
-se tre prodotti recuperati sono tutti pertinenti e il riferimento ne contiene
-sei, la quota pertinente può essere 1 mentre il richiamo è 0,5. Questo è un
-esempio illustrativo, non l'esito verificato di un caso del benchmark.
+Precisione geografica e richiamo hanno significati diversi: STAC-017 riceve
+un pass pur recuperando tre dei sei prodotti di riferimento, con quota di
+prodotti geograficamente pertinenti pari a 1. L'avviso di qualità
+\texttt{major} non determina da solo un fallimento nel protocollo.
 Un pass del protocollo non dimostra quindi esaustività, e l'assenza di
 fallimenti bloccanti non elimina eventuali avvisi di qualità.
 

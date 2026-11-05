@@ -111,3 +111,10 @@ Tutti i controlli che richiedono codice aggiunti durante questa passata sono nel
 Tutte le 91 pagine finali sono state renderizzate con Poppler e controllate nelle tavole d'insieme; formule, diagrammi e passaggi modificati sono stati riesaminati anche a dimensione leggibile. Il controllo strutturale dei link interni non equivale a garantire disponibilità futura degli URL esterni.
 
 SHA-256 dei PDF finali: `ebc9276350d73aaea50591fd1e0592ae34f137f56ce6597b479be3fa0a063c2a`.
+
+
+## Allineamento conclusivo al riscontro del 5 novembre 2026
+
+Integrato RISPOSTE_VERIFICHE.md come rapporto tecnico identificabile in bibliografia: conteggi, bootstrap, metriche di recupero, tassonomia e STAC-017 sono attribuiti al riscontro documentato. Gli artefatti grezzi rimangono esterni; non è stata eseguita una nuova campagna sperimentale. Snellite le ripetizioni dei limiti, corretti Chart/Validator, piano operativo, ambito OIDC e versione storica Grafana. I dettagli tecnici del prototipo restano nel rapporto fornito, senza ripeterne l'elenco nel corpo della tesi.
+
+Build finale: 91 pagine; 41 voci bibliografiche citate; nessun warning LaTeX, riferimento irrisolto, overfull o underfull. Controllate le viste di tutte le pagine. I due PDF sono identici. SHA256: `f5d7957a14e5bb009e8466ab4d5837897a81808b74b39897f357aeaa10d33933`. Questa verifica sostituisce il precedente hash del build.
