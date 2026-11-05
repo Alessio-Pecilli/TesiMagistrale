@@ -1,0 +1,206 @@
+La progettazione dell'assistente descritto in questa tesi richiede di distinguere
+il modello linguistico dal sistema che lo utilizza. Un LLM genera testo a partire
+dal contesto ricevuto; un agente, invece, mantiene uno stato, sceglie strumenti,
+osserva l'esito delle proprie azioni e decide come proseguire. Il capitolo
+concentra la discussione sull'apprendimento statistico, sull'architettura
+Transformer e sui limiti degli LLM isolati, per poi tornare alla nozione di
+agente adottata nel progetto.
+
+\section{Intelligenza artificiale e nozione di agente}
+
+Russell e Norvig distinguono le definizioni dell'intelligenza artificiale in base
+al riferimento al pensiero, al comportamento umano o alla razionalità. Per
+descrivere il sistema sviluppato è sufficiente la loro prospettiva agentiva: un
+agente riceve percezioni dall'ambiente e sceglie azioni \cite{russellNorvigAIMA}.
+Questa definizione permette di discutere il comportamento del software senza
+attribuire al modello proprietà cognitive non osservabili.
+
+Formalmente, un agente può essere rappresentato come una funzione che trasforma
+la storia delle osservazioni in un'azione. Se $p_1, p_2, \ldots, p_t$ sono le
+percezioni disponibili fino al tempo $t$, l'agente calcola una politica:
+\[
+    \pi(p_1, p_2, \ldots, p_t) = a_t
+\]
+dove $a_t$ è l'azione scelta. Nell'assistente oggetto della tesi, la storia
+comprende i messaggi e i risultati restituiti dalle fonti; le azioni sono il
+routing verso un ramo del workflow, l'invocazione di un tool o la produzione
+della risposta.
+
+Un classificatore che riceve un'immagine e restituisce una classe rientra nei
+sistemi di IA, ma non costituisce necessariamente un agente: non interagisce con
+l'ambiente nel tempo e non conserva un obiettivo persistente. Nell'agente queste
+due proprietà sono centrali, perché ogni azione modifica le informazioni sulle
+quali verrà presa la decisione successiva.
+
+\section{Apprendimento statistico e reti profonde}
+
+\subsection{Dai sistemi simbolici all'apprendimento dai dati}
+
+La ricerca degli anni Cinquanta adottò soprattutto rappresentazioni simboliche:
+fatti, predicati e regole di inferenza venivano specificati esplicitamente. Da
+questa impostazione derivano, tra l'altro, la pianificazione classica, la
+dimostrazione automatica di teoremi e i sistemi esperti. Il metodo resta efficace
+nei domini formalizzabili, ma richiede un aggiornamento manuale quando cambiano
+regole e conoscenza del dominio.
+
+Il machine learning affronta diversamente il problema: il programmatore definisce
+una famiglia di modelli e una procedura di apprendimento, mentre i parametri sono
+stimati a partire dagli esempi. Sistemi simbolici e modelli appresi non
+corrispondono comunque a fasi mutuamente esclusive; nell'architettura descritta
+più avanti, le decisioni probabilistiche dell'LLM convivono con regole e schemi
+di validazione scritti nel codice.
+
+\subsection{Machine learning}
+
+Nel machine learning una funzione sconosciuta viene approssimata a partire dai
+dati osservati. Dato un insieme di esempi:
+\[
+    D = \{(x_i, y_i)\}_{i=1}^{n}
+\]
+si cerca una funzione $f_\theta$ parametrizzata da $\theta$ tale che $f_\theta(x_i)$ sia vicino a $y_i$. In classificazione, $x_i$ può essere un'immagine e $y_i$ una classe. In regressione, $y_i$ può essere un valore numerico. In apprendimento non supervisionato, l'obiettivo non è predire etichette, ma scoprire struttura nei dati: cluster, rappresentazioni compatte, anomalie o fattori latenti.
+
+Rispetto a un programma tradizionale, parte del comportamento non è specificata
+direttamente nel codice. Il programmatore definisce architettura, procedura di
+addestramento e funzione obiettivo; il risultato dipende anche dai dati e dai
+parametri appresi.
+
+Un modello supervisionato viene allenato minimizzando una loss:
+\[
+    \theta^* = \arg\min_\theta \frac{1}{n} \sum_{i=1}^{n} L(f_\theta(x_i), y_i)
+\]
+dove $L$ misura l'errore tra predizione e valore atteso. L'architettura di
+$f_\theta$, i dati e la funzione di perdita dipendono dal problema, ma i
+parametri vengono in ogni caso aggiornati in funzione degli esempi osservati.
+
+Il machine learning ha reso possibile trattare problemi in cui scrivere regole esplicite era troppo costoso o fragile. Tuttavia, molti modelli classici richiedevano ancora una fase di feature engineering: un esperto doveva decidere quali caratteristiche estrarre dai dati grezzi. In visione artificiale, per esempio, prima delle reti profonde si progettavano descrittori di bordi, texture o forme. In elaborazione del linguaggio naturale si usavano n-grammi, dizionari, feature sintattiche e rappresentazioni sparse.
+
+\subsection{Deep learning}
+
+Il deep learning estende il machine learning usando reti neurali con molti
+strati, capaci di apprendere rappresentazioni gerarchiche. Ogni strato trasforma
+l'input in una rappresentazione intermedia sulla quale opera lo strato
+successivo. In una rete per immagini, per esempio, i primi livelli possono
+rilevare pattern locali e quelli finali concetti più vicini alle classi di
+interesse.
+
+LeCun, Bengio e Hinton descrivono il deep learning come una famiglia di metodi in
+cui modelli composti da più livelli apprendono rappresentazioni con diversi
+livelli di astrazione \cite{lecunDeepLearning}. Le trasformazioni utili al compito
+vengono apprese dai dati, riducendo il ricorso a feature progettate manualmente.
+
+La disponibilità di dataset estesi e GPU, insieme ai progressi nelle architetture
+e nelle procedure di ottimizzazione, ha reso praticabile l'addestramento di reti
+sempre più profonde.
+
+Nel 2012 AlexNet ottenne su ImageNet un errore di classificazione sensibilmente
+inferiore rispetto agli altri sistemi presentati nella stessa competizione
+\cite{krizhevskyImageNet}. Il risultato contribuì alla diffusione delle reti
+profonde nella visione artificiale e mostrò l'effetto congiunto di dataset estesi,
+GPU e architetture adatte al compito.
+
+Una parte della complessità si sposta così dalle condizioni scritte nel codice ai
+parametri: il comportamento dipende congiuntamente da dati, architettura e
+procedura di addestramento.
+
+\section{Modelli linguistici e architettura Transformer}
+
+\subsection{Modellazione del linguaggio}
+
+Il linguaggio naturale presenta ambiguità, dipendenze dal contesto e riferimenti a
+conoscenze non espresse nella frase. I sistemi di NLP hanno a lungo combinato
+regole linguistiche, feature manuali e modelli statistici; il deep learning ha
+poi favorito rappresentazioni dense e reti neurali sequenziali.
+
+Un modello linguistico assegna probabilità a sequenze di token. Se una frase viene rappresentata come $x_1, x_2, \ldots, x_n$, un modello autoregressivo stima:
+\[
+    P(x_1, \ldots, x_n) = \prod_{t=1}^{n} P(x_t \mid x_1, \ldots, x_{t-1})
+\]
+L'addestramento consiste quindi nella predizione del token successivo dato il
+contesto precedente. Pur essendo formulato come un compito locale, questo
+obiettivo richiede di rappresentare regolarità grammaticali e semantiche, oltre
+alle relazioni fattuali presenti nei dati di addestramento.
+
+Il tokenizer converte il testo in unità discrete, che possono coincidere con una
+parola, una sua parte o un segno di punteggiatura. A ciascuna unità è associato
+un identificativo numerico, trasformato poi in un embedding sul quale opera il
+modello.
+
+\subsection{Transformer e attenzione}
+
+L'architettura di riferimento per gli LLM è il Transformer, introdotto da Vaswani
+et al. in \emph{Attention Is All You Need} \cite{vaswaniAttention}. I precedenti
+modelli sequenziali usavano spesso reti ricorrenti o convoluzionali. Le reti
+ricorrenti elaborano la sequenza un elemento alla volta e mantengono uno stato
+nascosto, con minori possibilità di parallelizzare l'addestramento e difficoltà
+nel rappresentare dipendenze molto lunghe.
+
+Il Transformer usa invece il meccanismo di self-attention. Ogni token costruisce una rappresentazione guardando gli altri token del contesto e pesandoli in base alla loro rilevanza. In forma semplificata, l'attenzione usa tre matrici: query $Q$, key $K$ e value $V$. Il punteggio tra un token e un altro viene calcolato confrontando query e key; i value vengono poi combinati con pesi normalizzati:
+\[
+    \mathrm{Attention}(Q,K,V) = \mathrm{softmax}\left(\frac{QK^T}{\sqrt{d_k}}\right)V
+\]
+Il calcolo mette in relazione direttamente posizioni diverse della sequenza,
+senza comprimere tutto il prefisso in un singolo stato ricorrente. Le diverse
+teste di attenzione apprendono relazioni differenti in parallelo. Questa
+struttura facilita la parallelizzazione dell'addestramento e si è dimostrata
+adatta a scalare con dati e modelli di grandi dimensioni.
+
+\subsection{Modelli linguistici di grandi dimensioni}
+
+Con LLM si indica un modello linguistico neurale addestrato su collezioni testuali
+estese, in genere basato su Transformer. Il termine ``grande'' può riferirsi al
+numero di parametri, ai dati e al calcolo impiegati o alla lunghezza del contesto.
+
+I parametri sono i valori numerici appresi, organizzati principalmente in matrici
+di pesi e vettori di bias. GPT-3, per esempio, è stato presentato come un modello
+autoregressivo da 175 miliardi di parametri \cite{brownGPT3}. La sola dimensione
+non misura la qualità di un modello: architettura, dati e addestramento incidono
+sul risultato, mentre l'aumento dei parametri comporta maggiori costi di memoria
+e calcolo.
+
+Un parametro non corrisponde a una frase memorizzata, ma è un coefficiente che
+contribuisce a molte predizioni. L'informazione appresa è distribuita tra i
+pesi, mentre un database conserva record espliciti e li recupera senza
+generarli. La distinzione è rilevante per questo lavoro: i dati su eventi e
+acquisizioni satellitari devono provenire dalle fonti interrogate dal sistema,
+non dalla memoria parametrica del modello.
+
+Durante l'inferenza, il modello riceve un prompt, cioè una sequenza di input, e produce una distribuzione di probabilità sul token successivo. La generazione procede iterativamente: il token scelto viene aggiunto al contesto e il processo continua. Parametri di decoding come temperatura, top-$p$ o penalità di ripetizione modificano il modo in cui si campiona dalla distribuzione, influenzando determinismo e varietà dell'output.
+
+\subsection{Pre-addestramento, adattamento e limiti degli LLM isolati}
+
+Il ciclo tipico di un LLM moderno comprende il pre-addestramento su grandi
+collezioni di testo e, spesso, un successivo adattamento alle istruzioni. Nel
+contesto applicativo di questa tesi, l'uso del solo modello lascia irrisolti tre
+problemi:
+\begin{itemize}
+    \item \textbf{Conoscenza statica}: i parametri riflettono il training set e non si aggiornano automaticamente;
+    \item \textbf{Allucinazione}: il modello può generare testo plausibile ma falso;
+    \item \textbf{Assenza di effetti esterni}: un modello che produce solo testo non può eseguire comandi, leggere documenti aggiornati o interagire con il mondo.
+\end{itemize}
+
+Fonti aggiornate, memoria e azioni devono quindi essere fornite da componenti
+esterni al modello.
+
+\section{Agenti basati su LLM}
+
+Nelle architetture considerate in questa tesi, un agente IA è un sistema
+software che usa un LLM per scegliere e coordinare azioni. Attorno al modello è
+implementato un ciclo di controllo che riceve un obiettivo, osserva il contesto,
+invoca strumenti esterni e aggiorna lo stato in base ai risultati ottenuti.
+
+La letteratura recente ha studiato esplicitamente l'alternanza tra ragionamento
+e azione. ReAct combina tracce di ragionamento e invocazioni di strumenti nello
+stesso processo decisionale \cite{yaoReAct}; Toolformer affronta invece il
+problema di apprendere quando e come richiamare API esterne
+\cite{schickToolformer}. Il progetto qui presentato non addestra un nuovo modello: applica questi
+principi a un workflow LangGraph controllato (\emph{Copernicus Data Workspace}),
+nel quale le decisioni dell'LLM sono validate da schemi e regole prima
+dell'esecuzione sulle sorgenti.
+
+Il passaggio dai sistemi simbolici agli agenti contemporanei non va inteso come
+una sostituzione lineare: regole esplicite e modelli appresi convivono nelle
+stesse architetture. In questa prospettiva, il modello linguistico è una
+componente dell'agente e non la sua intera implementazione. Nel prototipo
+azioni, memoria Redis, artefatti dashboard e controlli restano affidati a
+componenti software separati. Il capitolo seguente esamina MCP, il protocollo
+adottato per collegare alcuni di questi componenti a GDACS e CEMS.

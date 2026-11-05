@@ -1,0 +1,210 @@
+Una domanda relativa a un'emergenza naturale raramente trova risposta in una
+sola fonte. Sapere se si è verificato un terremoto, verificare quali acquisizioni
+satellitari coprano la zona e controllare se sia stata attivata una produzione
+cartografica sono operazioni diverse. I dati possono riguardare lo stesso luogo
+e lo stesso intervallo temporale, ma descrivono fenomeni distinti e hanno tempi
+di aggiornamento, formati e livelli di affidabilità propri.
+
+Si consideri, ad esempio, una richiesta sui terremoti avvenuti in Italia
+nell'ultima settimana e sulla relativa copertura satellitare. La prima parte
+richiede un elenco di eventi e dei rispettivi livelli di allerta; la seconda
+riguarda la disponibilità di osservazioni della Terra, non la misura dei danni.
+Un'eventuale attivazione di un servizio di emergenza aggiunge poi informazioni
+su aree di interesse e prodotti cartografici. Riunire questi elementi in una
+sola risposta è utile soltanto se la loro provenienza rimane riconoscibile.
+
+Questa tesi affronta il problema realizzando \emph{Copernicus Data Workspace}:
+uno spazio di lavoro conversazionale che coordina fonti geospaziali indipendenti.
+L'utente formula la richiesta in linguaggio naturale; il sistema ne ricava
+luogo, periodo e obiettivo, sceglie le fonti pertinenti e restituisce testo,
+dati strutturati e visualizzazioni. Il modello linguistico aiuta a interpretare
+la domanda e a formulare la risposta, ma non viene trattato come archivio degli
+eventi né come origine dei valori mostrati nei grafici.
+
+\section{Posizionamento rispetto ai lavori correlati}
+
+Il progetto si colloca nella linea degli agenti basati su LLM che decidono
+quando invocare strumenti esterni
+\cite{yaoReAct,schickToolformer,openaiFunctionCalling}. Rispetto a un assistente
+generico con function calling, il perimetro è ristretto all'osservazione della
+Terra e alle fonti di allerta: catalogo metadati Copernicus, STAC live, GDACS e
+CEMS. Sistemi commerciali o sperimentali di ``Earth Copilot'' o chat su cataloghi
+EO condividono l'idea di interrogare metadati in linguaggio naturale; qui si
+insiste sulla separazione fra Discovery (risorsa catalogata) e acquisizioni
+STAC live, sul ranking deterministico e su un protocollo di valutazione con
+controlli critici. MCP \cite{mcpSpec} è usato come contratto di integrazione per
+GDACS e CEMS, non come soluzione alla semantica geospaziale. Il contributo non è
+un nuovo algoritmo di retrieval, bensì l'organizzazione di questi elementi in un
+workspace verificabile.
+
+\section{Il problema affrontato}
+
+Le applicazioni conversazionali rendono semplice l'accesso a servizi che, presi
+singolarmente, richiederebbero la conoscenza di endpoint, parametri e formati di
+risposta. La semplificazione dell'interfaccia non elimina però la complessità
+dei dati sottostanti. Nel percorso operativo sono coinvolte tre famiglie di
+informazioni, alle quali si affianca un catalogo trasversale di metadati.
+
+GDACS pubblica eventi e allerte relativi a disastri naturali. Il catalogo del
+Copernicus Data Space Ecosystem descrive invece le acquisizioni satellitari
+disponibili per una certa area e un certo periodo. Copernicus Emergency
+Management Service documenta attivazioni e prodotti cartografici predisposti a
+supporto della gestione delle emergenze. Queste fonti possono essere consultate
+nello stesso turno, ma non devono essere fuse come se misurassero la stessa
+grandezza. Il numero di acquisizioni satellitari, per esempio, non esprime la
+gravità di un evento.
+
+Alla distinzione semantica si aggiunge quella tecnica. GDACS distribuisce anche
+feed XML, il catalogo satellitare espone un'interfaccia STAC e CEMS adotta
+strutture specifiche per le proprie attivazioni. I servizi possono restituire
+risposte vuote, diventare temporaneamente indisponibili o richiedere trattamenti
+diversi degli errori. Collocare questi dettagli nei prompt renderebbe difficile
+capire se un'informazione sia stata recuperata oppure generata dal modello.
+
+Anche l'interpretazione linguistica deve essere verificata. Un LLM sa trattare
+espressioni come ``la settimana scorsa'', riconoscere un codice CEMS e comporre
+un testo leggibile, ma la sua conoscenza può essere incompleta o non aggiornata.
+La plausibilità di una frase non dimostra che il dato corrispondente esista nella
+fonte consultata. Nel progetto interpretazione, accesso ai servizi e calcoli sono
+perciò passaggi separati.
+
+I turni successivi richiedono inoltre di conservare il contesto. Dopo una tabella
+o un grafico, l'utente può chiedere di mostrare una sola piattaforma, cambiare
+l'aggregazione o aggiornare una sorgente. Il significato di questi comandi
+dipende dai risultati precedenti; lo stato deve quindi essere associato alla
+conversazione senza inserire ogni dato remoto nell'intera cronologia testuale.
+
+La verificabilità riguarda sia il testo sia le visualizzazioni. Link,
+identificativi, timestamp e criteri di aggregazione fanno parte del risultato.
+Un grafico deve indicare i record e i campi dai quali deriva; il modello può
+proporre la vista, mentre conteggi e misure vengono calcolati dal software.
+
+\section{Obiettivo del lavoro}
+
+L'obiettivo è un prototipo che trasformi una richiesta geografica in un percorso
+di consultazione controllato. Il sistema deve poter interrogare più fonti quando
+la domanda lo richiede, continuare a produrre una risposta se una sorgente
+secondaria non è disponibile e mantenere il contesto necessario per i turni
+successivi. I risultati devono restare associati alla fonte dalla quale
+provengono.
+
+La tesi non addestra un nuovo modello linguistico. Studia l'architettura che lo
+circonda: ammissione della domanda nel dominio, risoluzione dei parametri,
+scelta delle sorgenti e restituzione dei risultati nel workspace. Le ambiguità
+linguistiche sono affidate al modello; schemi, filtri, calcoli e persistenza
+rimangono sotto il controllo del codice.
+
+Il contributo dichiarato è \textbf{progettuale e implementativo}: un prototipo
+con responsabilità specializzate, percorsi Discovery/operativo controllati e
+artefatti verificabili. Il titolo parla di approccio multiagentico perché il
+workflow suddivide interpretazione, recupero e composizione fra nodi distinti;
+questa organizzazione non è però confrontata, in questa tesi, con un agente
+singolo o con una pipeline più semplice nelle stesse condizioni. Non si
+sostiene quindi un vantaggio quantitativo di accuratezza, latenza o costo
+rispetto a tali alternative: tale affermazione richiederebbe una baseline
+controllata.
+
+Il percorso \textbf{operativo} combina la ricerca web con tre fonti strutturate.
+GDACS fornisce eventi e allerte; il catalogo STAC di Copernicus descrive
+acquisizioni satellitari e relativa copertura; CEMS permette di consultare
+attivazioni di Rapid Mapping e Risk and Recovery Mapping. Il contenuto della
+domanda determina quali percorsi siano necessari e più rami possono essere
+attivati nello stesso turno.
+
+Il percorso di \textbf{Discovery} affronta una domanda complementare: quali
+risorse Copernicus permettono di studiare una certa variabile, area o periodo?
+Tre harvester raccolgono metadati Marine, CDSE/STAC e Drought in NebulaGraph.
+Il workflow consulta questo grafo per individuare dataset, variabili,
+collezioni e layer pertinenti. La scoperta di un dataset di temperatura non
+equivale al download dei suoi valori; analogamente, il catalogo locale non
+sostituisce la ricerca delle acquisizioni sul servizio STAC remoto. Sono
+ammessi anche percorsi \textbf{combinati}, in cui Discovery e analisi operativa
+convivono nella stessa sessione senza confondere metadati di catalogo e scene
+satellitari live.
+
+Per GDACS e CEMS è stato adottato il Model Context Protocol. I dettagli dei due
+servizi vengono incapsulati in server separati, ai quali il backend accede
+attraverso un client comune. Il catalogo STAC live rimane integrato direttamente
+nell'applicazione. La presenza dei due approcci nello stesso progetto permette
+di confrontarne gli effetti sull'organizzazione del codice, senza assumere che
+un protocollo risolva automaticamente ogni problema di integrazione.
+
+Il punto di ingresso è la dashboard nativa autenticata con Keycloak
+(\url{http://localhost:8080/dashboard}): home in italiano con selettore IT/EN,
+formulazione della domanda, suggerimenti e ripresa delle indagini recenti. La
+risposta operativa può includere una dashboard delle acquisizioni Copernicus.
+Grafici, indicatori, tabella e mappa derivano dai record STAC normalizzati;
+GDACS, CEMS e ricerca web restano nella parte testuale o in sezioni dedicate,
+perché le rispettive quantità non sono confrontabili nelle stesse serie.
+Durante la conversazione l'utente può applicare filtri, cambiare vista o
+chiedere una nuova aggregazione. Ogni modifica produce una revisione
+dell'artefatto, ma i valori continuano a essere calcolati sul dataset
+conservato.
+
+La Discovery restituisce invece un artefatto di risorse catalogate con
+identificativi, descrizioni e collegamenti. Sono quindi distinte la vista dei
+metadati e quella delle acquisizioni. A entrambe si affiancano un'infrastruttura
+di osservabilità, per ricostruire tempi ed errori, e un protocollo di
+valutazione del workflow, descritto separatamente nel Capitolo~\ref{cap:7}.
+
+\section{Impostazione del progetto}
+
+Il repository umbrella \texttt{copernicus\_platform} orchestra backend, frontend,
+server MCP, Redis, Keycloak e harvester NebulaGraph tramite Docker Compose. La
+domanda viene prima confrontata con il dominio geografico e ambientale, poi
+trasformata in una rappresentazione strutturata e assegnata alle sorgenti
+pertinenti. Un grafo LangGraph stabilisce i percorsi consentiti e permette ai
+rami indipendenti di procedere in parallelo. Rispetto a un agente unico con
+accesso a tutti gli strumenti, questa struttura rende ispezionabili le
+condizioni applicate prima di raccogliere i risultati.
+
+Ogni integrazione traduce la risposta remota in un dataset con campi stabili. I
+client possono così essere provati con input controllati e gli errori restano
+associati al servizio che li ha prodotti. Il fallimento di un ramo non elimina i
+risultati già disponibili; la risposta segnala quale fonte non ha risposto.
+
+La memoria è gestita come stato applicativo. A ogni conversazione è associato
+un checkpoint Redis che comprende i messaggi necessari, i risultati delle
+sorgenti e i riferimenti agli artefatti. Un turno successivo può così
+riutilizzare un dataset o aggiornare soltanto la parte indicata dall'utente.
+La memoria non modifica i parametri del modello e non costituisce una base di
+conoscenza permanente condivisa fra utenti diversi.
+
+La verifica software copre parsing dei feed, filtri e aggregazioni con test
+unitari; i percorsi del workflow vengono provati con dipendenze simulate; API,
+persistenza e operazioni sulla dashboard sono controllate dai test di
+integrazione. La valutazione end-to-end del comportamento dell'assistente è affidata al
+protocollo~6.0 (dataset corrente da 105 domande, controlli deterministici e
+LLM-as-a-Judge), descritto nel Capitolo~\ref{cap:7}. Dopo le fonti e
+l'architettura, il Capitolo~\ref{cap:5} presenta i percorsi applicativi; i
+Capitoli~\ref{cap:6} e~\ref{cap:7} approfondiscono rispettivamente
+osservabilità e valutazione.
+
+\section{Perimetro e limiti}
+
+Il prototipo non è uno strumento operativo di protezione civile e non sostituisce
+le comunicazioni delle autorità competenti. GDACS offre valutazioni rapide che
+possono cambiare quando vengono raccolte nuove informazioni. Le attivazioni CEMS
+documentano prodotti richiesti e realizzati in uno specifico contesto operativo.
+Il catalogo STAC indica che determinate osservazioni sono disponibili, non che
+esse siano sufficienti a stabilire l'entità di un danno.
+
+La dashboard non esegue un'analisi scientifica delle immagini satellitari. La
+heatmap rappresenta la densità dei centri delle bounding box degli item
+recuperati, mentre i
+footprint mostrano le aree dichiarate nei metadati. Non vengono calcolati indici
+spettrali, classificazioni del suolo o stime automatiche degli effetti di un
+evento. Tale distinzione limita le conclusioni che possono essere tratte dalle
+visualizzazioni.
+
+Anche la copertura geografica dipende dai servizi consultati. Un luogo espresso
+in linguaggio naturale deve essere risolto in coordinate o in una bounding box;
+nomi ambigui possono richiedere un chiarimento. Ricerca web, cataloghi e feed
+dipendono inoltre dalla rete e dalla disponibilità dei rispettivi fornitori. Il
+sistema gestisce errori e risultati parziali, ma non può rendere disponibile una
+fonte esterna che non risponde.
+
+Per questo le risposte conservano collegamenti e identificativi, distinguono i
+dati recuperati dal testo generato e segnalano le sorgenti mancanti. Il criterio
+adottato è rendere riconoscibile il percorso con cui il risultato è stato
+costruito, anche quando non tutte le fonti sono disponibili.

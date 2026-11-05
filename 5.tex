@@ -1,0 +1,564 @@
+Per collegare l'architettura al comportamento osservabile, il capitolo segue
+alcune richieste dall'ingresso in \emph{Copernicus Data Workspace} fino alla
+risposta. Gli scenari sono ricavati dai contratti e dai rami implementati nel
+codice; i valori citati illustrano il flusso e non costituiscono risultati
+relativi a un evento reale. I risultati di benchmark documentati sono presentati
+separatamente nel Capitolo~\ref{cap:7}.
+
+\section{Ingresso della richiesta}
+
+Dalla home del workspace l'utente descrive luogo, fenomeno e periodo e avvia
+una nuova analisi; può anche riprendere un'indagine precedente che conserva
+dashboard, filtri e contesto. La dashboard invia i messaggi al backend mediante
+l'endpoint compatibile con le chat completion OpenAI. La richiesta contiene
+modello, cronologia, opzione di streaming e metadati utili a ricavare
+l'identificativo della conversazione. Il backend anonimizza e normalizza tale
+identificativo, quindi invoca il \texttt{WorkflowAgent}.
+
+Nel client legacy Open WebUI possono comparire anche richieste tecniche
+generate dall'interfaccia (titolo della chat, suggerimenti). Questi task non
+devono essere scambiati per domande geografiche e vengono gestiti
+separatamente.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.92\textwidth]{Images/screenshots/ui-workspace-prompt.png}
+\caption{Formulazione di una richiesta operativa nella dashboard nativa, con
+suggerimenti contestuali e avvio di una nuova analisi.}
+\label{fig:ui-workspace-prompt}
+\end{figure}
+
+Il nodo \texttt{ingress} estrae l'ultimo messaggio umano e ripulisce eventuali
+marcatori dell'interfaccia. Il Gateway decide quindi se procedere. Da questo
+punto sono possibili tre casi:
+
+\begin{enumerate}
+    \item nuova richiesta ammessa: parsing e routing completi;
+    \item follow-up ammesso: riuso del checkpoint e selezione dei soli nodi
+    necessari;
+    \item richiesta fuori dominio o classificazione fallita: risposta diretta.
+\end{enumerate}
+
+\section{Scenario 1: analisi multi-sorgente di un pericolo}
+
+Si consideri la domanda:
+
+\begin{quote}
+\emph{``Mostrami i terremoti di magnitudo superiore a 3 avvenuti in Italia
+negli ultimi sette giorni e fammi vedere la copertura satellitare.''}
+\end{quote}
+
+\subsection{Risoluzione semantica}
+
+Il parser produce una richiesta strutturata simile alla seguente:
+
+\begin{itemize}
+    \item categoria: \texttt{hazard}, sottotipo terremoto;
+    \item luogo: Italia, con bounding box quando il geocoding è disponibile;
+    \item periodo: intervallo assoluto corrispondente agli ultimi sette giorni;
+    \item filtro: magnitudo maggiore di 3;
+    \item viste: dati strutturati e mappa.
+\end{itemize}
+
+Il valore temporale non viene lasciato come testo ambiguo. È risolto rispetto
+all'istante corrente e al fuso orario del backend. Anche il luogo viene
+trasformato, quando possibile, da etichetta a geometria.
+
+\subsection{Pianificazione ed esecuzione}
+
+Poiché la categoria è un pericolo, il piano comprende Search, GDACS e
+Copernicus STAC. I tre worker possono iniziare in parallelo:
+
+\begin{itemize}
+    \item Search recupera contesto web attuale;
+    \item GDACS chiede al server MCP gli eventi e applica i filtri;
+    \item STAC interroga CDSE per area, periodo e collezioni.
+\end{itemize}
+
+Il filtro GDACS combina tutte le condizioni. Se sono presenti coordinate, la
+verifica spaziale usa la bounding box del luogo invece di affidarsi soltanto al
+nome del paese. Una bounding box nazionale (per esempio dell'Italia) è un
+rettangolo che può includere aree esterne al territorio: è un filtro
+geometrico, non una verifica di appartenenza amministrativa. Per una richiesta
+cittadina il sistema non degrada automaticamente l'ambito all'intero Stato.
+Periodo, magnitudo, tipo e posizione devono essere soddisfatti dallo stesso
+record. La risposta si limita agli eventi presenti nel feed interrogato: non è
+un censimento completo di tutti i fenomeni nella regione.
+
+Il client STAC invia una ricerca con bounding box e intervallo ISO 8601. Per
+intervalli o aree estesi può suddividere la richiesta in partizioni temporali
+e quadranti, con limiti sul numero di tentativi. I risultati sono deduplicati
+per identificativo e ridotti ai metadati utili.
+
+\subsection{Sincronizzazione e risposta}
+
+LangGraph attende la convergenza dei worker. Il Chart Agent riceve soltanto
+dataset normalizzati e aggregazioni; il renderer della mappa riceve footprint e
+centroidi. Nel percorso operativo, le acquisizioni STAC alimentano inoltre
+un artefatto dashboard incorporato nel workspace. Il Conversation Agent compone
+infine:
+
+\begin{enumerate}
+    \item sintesi testuale;
+    \item eventuali tabelle;
+    \item dashboard Copernicus con KPI, grafici, tabella e heatmap;
+    \item elenco delle fonti consultate.
+\end{enumerate}
+
+\begin{figure}[htbp]
+\centering
+\resizebox{0.96\textwidth}{!}{%
+\begin{tikzpicture}[
+    actor/.style={rectangle,draw=black!70,fill=blue!8,minimum width=24mm,
+        minimum height=8mm,align=center},
+    msg/.style={-{Latex[length=2mm]},thick},
+    return/.style={-{Latex[length=2mm]},thick,dashed},
+    every node/.style={font=\small}
+]
+    \node[actor] (u) at (0,0) {Utente};
+    \node[actor] (a) at (3.2,0) {API};
+    \node[actor] (w) at (6.4,0) {Workflow};
+    \node[actor] (s) at (9.6,0) {Sorgenti};
+    \node[actor] (v) at (12.8,0) {Vista};
+
+    \foreach \x in {0,3.2,6.4,9.6,12.8}
+        \draw[gray!60] (\x,-0.5) -- (\x,-6.8);
+
+    \draw[msg] (0,-1.0) -- node[above]{domanda} (3.2,-1.0);
+    \draw[msg] (3.2,-1.8) -- node[above]{messaggi + thread} (6.4,-1.8);
+    \draw[msg] (6.4,-2.6) -- node[above]{query strutturate} (9.6,-2.6);
+    \draw[return] (9.6,-3.5) -- node[above]{dataset normalizzati} (6.4,-3.5);
+    \draw[msg] (6.4,-4.4) -- node[above]{artefatti} (12.8,-4.4);
+    \draw[return] (12.8,-5.2) -- node[above]{artefatto dashboard} (6.4,-5.2);
+    \draw[return] (6.4,-6.0) -- node[above]{risposta finale} (3.2,-6.0);
+    \draw[return] (3.2,-6.6) -- node[above]{stream SSE} (0,-6.6);
+\end{tikzpicture}}
+\caption{Sequenza end-to-end di una richiesta multi-sorgente. L'artefatto
+dashboard è costruito nel workflow a partire dai record STAC normalizzati; la
+vista nel browser lo carica e lo presenta, senza ricalcolarne i valori.}
+\label{fig:sequenza-end-to-end}
+\end{figure}
+
+\section{Scenario 2: interrogazione di una attivazione CEMS}
+
+La domanda:
+
+\begin{quote}
+\emph{``Dammi i dettagli dell'attivazione Copernicus EMSR884.''}
+\end{quote}
+
+contiene un identificativo non ambiguo. Il ramo CEMS risponde alla domanda
+diretta; nel prototipo attuale il piano operativo può comunque attivare anche
+Search e STAC come \emph{arricchimento} per contesto e dashboard. È una scelta
+di prodotto, non una necessità semantica della sola richiesta di dettaglio: a
+parità di domanda, aumenta latenza e dipendenze. Il CEMS Router valida il
+codice con il formato \texttt{EMSR\#\#\#} o \texttt{EMSN\#\#\#} e sceglie
+l'endpoint corretto.
+
+Per \texttt{EMSR} vengono consultati i dettagli Rapid Mapping; per
+\texttt{EMSN} quelli Risk and Recovery. Il dataset restituito può includere
+paese, categoria, stato, istante di attivazione, aree di interesse, numero e
+tipo dei prodotti, URL di download o mappe.
+
+Se una successiva domanda chiede anche le acquisizioni Sentinel nella medesima
+area, il ramo CEMS può essere eseguito prima di STAC. Le coordinate o
+l'estensione dell'attivazione vengono usate per arricchire la ricerca, evitando
+un geocoding generico.
+
+\section{Scenario 3: follow-up e riuso della memoria}
+
+Dopo una prima risposta l'utente può scrivere:
+
+\begin{quote}
+\emph{``Ora raggruppali per giorno e mostrami un grafico a barre.''}
+\end{quote}
+
+Il messaggio dipende dal contesto: il pronome ``li'' si riferisce al dataset
+precedente. Il Gateway riceve una vista compatta dello stato e riconosce la
+continuità del dominio. Il Conversation Agent pianifica quindi una delle
+azioni di follow-up:
+
+\begin{itemize}
+    \item \texttt{answer\_from\_context}, per spiegare dati già presenti;
+    \item \texttt{render\_chart} o \texttt{render\_heatmap}, per una nuova
+    vista dello stesso dataset;
+    \item aggiornamento di una singola sorgente;
+    \item aggiornamento di più sorgenti;
+    \item \texttt{new\_request}, se l'utente cambia oggetto.
+\end{itemize}
+
+Nel caso dell'esempio non è necessario ripetere le chiamate GDACS e STAC. Il
+Chart Agent usa il dataset conservato in Redis e aggiorna la visualizzazione.
+Se l'utente opera nella dashboard, il Composer traduce il comando in una
+mutazione tipizzata e il backend salva una nuova revisione dell'artefatto.
+Questo comportamento riduce latenza, traffico verso servizi esterni e
+possibilità che un aggiornamento involontario renda incoerenti due turni
+consecutivi.
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[
+    node distance=9mm and 12mm,
+    flowbox/.style={rectangle,rounded corners,draw=blue!65!black,thick,
+        fill=blue!10,align=center,minimum height=9mm,text width=27mm},
+    decision/.style={diamond,aspect=2,draw=violet!65!black,thick,
+        fill=violet!10,align=center,text width=22mm,inner sep=1pt},
+    line/.style={-{Latex[length=2mm]},thick}
+]
+    \node[flowbox] (follow) {Nuovo turno};
+    \node[decision,right=of follow] (ctx) {Contesto sufficiente?};
+    \node[flowbox,above right=10mm and 13mm of ctx] (answer) {Rispondi o crea vista\\dal checkpoint};
+    \node[flowbox,below right=10mm and 13mm of ctx] (refresh) {Aggiorna solo\\le fonti richieste};
+    \node[flowbox,right=28mm of ctx] (compose) {Componi risposta};
+    \draw[line] (follow) -- (ctx);
+    \draw[line] (ctx) -- node[above left,font=\scriptsize]{si} (answer);
+    \draw[line] (ctx) -- node[below left,font=\scriptsize]{no} (refresh);
+    \draw[line] (answer) -- (compose);
+    \draw[line] (refresh) -- (compose);
+\end{tikzpicture}
+\caption{Scelta fra riuso della memoria e aggiornamento delle fonti.}
+\label{fig:follow-up}
+\end{figure}
+
+\section{Scenario 4: scoprire un dataset nel grafo}
+\label{sec:scenario-discovery}
+
+Si consideri la richiesta:
+
+\begin{quote}
+\emph{``Cerco un dataset orario di temperatura superficiale del Mar Nero:
+quale variabile contiene?''}
+\end{quote}
+
+Il Gateway deve riconoscere un compito di Discovery. Il nodo d'intento
+rappresenta il tema temperatura superficiale, l'area Mar Nero, la risoluzione
+oraria e il tipo dataset con variabile. Il servizio recupera candidati dal
+sottografo Marine, ne verifica la compatibilità e applica il ranking
+deterministico descritto nella Sezione~\ref{subsec:discovery-workflow}.
+
+Lo snapshot di riferimento del benchmark, salvato il 13 ottobre 2026 e riportato
+nella guida \cite{guidaProgetto2026}, associa questa ricerca al dataset
+\path{cmems_obs-sst_blk_phy-sst_nrt_diurnal-oi-0.0625deg_PT1H-m}, dal titolo
+\emph{Black Sea Diurnal Subskin SST Analysis, L4, 1/16deg hourly}, con variabile
+\texttt{analysed\_sst}. La bounding box registrata è
+$[26{,}375; 38{,}75; 42{,}375; 48{,}8125]$ nell'ordine ovest, sud, est, nord.
+Sono metadati dello snapshot; non costituiscono una nuova lettura del database
+né una misura della temperatura.
+
+La risposta deve rendere riconoscibili dataset, variabile e provenienza.
+L'artefatto consente di consultare le risorse selezionate; non va popolato con
+acquisizioni Sentinel come se fossero osservazioni della variabile Marine.
+L'esempio distingue così la scoperta della fonte scientifica dalla ricerca di
+scene satellitari e dall'eventuale analisi dei valori, che resta fuori perimetro.
+
+Se un turno successivo chiede le acquisizioni relative alla stessa area, il
+passaggio al percorso operativo deve conservare il riferimento geografico.
+Verificare questa continuità richiede di confrontare intento, query effettiva,
+artefatto persistito e viste rese dal browser. Il solo cambio della scheda
+visuale non prova che sia stata eseguita una ricerca corretta. Questo controllo
+conversazionale è distinto dai casi a thread nuovo del benchmark.
+
+\section{Dashboard Copernicus}
+
+La dashboard analitica è il canale principale per le visualizzazioni delle
+acquisizioni satellitari. Nel ramo operativo viene prodotta e aperta nel
+workspace come artefatto a sé (vista ``Analisi dati Copernicus''), con
+navigazione dedicata a risultato, grafici, mappa, dati e attività, più una
+chat laterale sul risultato già caricato. Grafici, KPI, tabella e heatmap
+usano esclusivamente record STAC Copernicus normalizzati; Search, GDACS e CEMS
+restano nella risposta testuale o in sezioni separate. La scelta evita di
+mescolare, per esempio, il numero di eventi GDACS con il numero di prodotti
+satellitari.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.92\textwidth]{Images/screenshots/ui-workspace-session.png}
+\caption{Sessione operativa ripresa dal workspace: sintesi delle acquisizioni
+(conteggio di prodotti/item STAC recuperati), navigazione
+Risultato/Grafici/Mappa/Dati e chat laterale sul risultato già caricato.}
+\label{fig:ui-workspace-session}
+\end{figure}
+
+Il ramo Discovery presenta invece un artefatto del catalogo: schede e metadati
+delle risorse pertinenti. Le due viste rispondono a compiti diversi e devono
+mantenere esplicita la provenienza.
+
+\subsection{Dati, provenienza e composizione}
+
+Il Chart Agent costruisce una specifica JSON con valori derivati dal dataset:
+etichette, serie, tipo di grafico, campo e misura di origine, filtri, numero di
+record e identificativi dei prodotti. Il modello può proporre il tipo di vista
+o una nuova aggregazione, ma conteggi, percentuali, medie, variazioni e
+confronti sono sempre ricalcolati dal backend. La sezione ``Come è stato
+calcolato'' e la tabella dei dati di ciascun grafico rendono questa provenienza
+ispezionabile; i dati possono inoltre essere esportati in CSV.
+
+La composizione iniziale può limitare gli output richiesti dall'utente: una
+domanda come ``solo la heatmap'' non apre inutilmente grafici e tabella, mentre
+una richiesta generale include KPI, grafici, tabella, sintesi e mappa. Anche in
+assenza di acquisizioni l'artefatto viene mostrato con uno stato vuoto esplicito
+e non con un grafico artificialmente popolato.
+
+\subsection{Grafici leggibili e senza sovrapposizioni}
+
+Le regole di rendering descritte nella
+Sezione~\ref{subsec:leggibilita-grafici} vengono applicate alla specifica
+generata prima che la dashboard sia mostrata. Il Dashboard Validator riallinea
+etichette, valori e serie e intercetta valori non numerici; ECharts gestisce poi
+dimensioni, etichette e scorrimento nel browser. La verifica del payload rimane
+così separata dalle correzioni puramente grafiche.
+
+\subsection{Interazione, revisioni e chat contestuale}
+
+Nel workspace i controlli visivi permettono di scegliere barre, linee o torta,
+ordinamento, Top~N e visibilità dei grafici. Un click su categoria o cella può
+attivare un cross-filter: il backend applica il filtro ai record e ricalcola
+simultaneamente KPI, grafici, tabella e heatmap. I filtri attivi sono mostrati
+e possono essere azzerati con un solo comando.
+
+Ogni modifica passa attraverso azioni tipizzate, validate e persistite. Sono
+disponibili annullamento, ripristino e confronto tra revisioni. La chat
+contestuale sul risultato ha un thread indipendente per grafico, tabella,
+heatmap o dashboard: risponde sul sottoinsieme corrente e può trasformare
+istruzioni come ``filtra solo Sentinel-2A'' o ``cambia questo grafico in
+linee'' in mutazioni. La ricerca web è usata solo quando serve un contesto
+esterno non deducibile dai dati visualizzati. La home del workspace conserva
+inoltre l'elenco delle indagini recenti, così da riprendere una sessione senza
+ripetere la domanda iniziale.
+
+\subsection{Heatmap Copernicus}
+
+Leaflet rappresenta una heatmap della densità dei centri delle bounding box
+degli item recuperati e collega il risultato a una vista con footprint
+rettangolari e metadati STAC. Non misura copertura areale né intensità del
+fenomeno osservato. Se un cross-filter è attivo, la mappa usa lo stesso
+sottoinsieme di record degli altri componenti.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.92\textwidth]{Images/screenshots/ui-workspace-mappa.png}
+\caption{Vista \emph{Mappa}: densità dei centri delle bounding box degli item
+STAC recuperati (non intensità del fenomeno) e chat laterale sul risultato.}
+\label{fig:ui-workspace-mappa}
+\end{figure}
+
+\section{Streaming della risposta}
+
+Durante l'esecuzione il backend invia aggiornamenti sullo stato dei nodi
+(interpretazione, routing, recupero delle fonti, composizione). FastAPI
+traduce gli eventi LangGraph in Server-Sent Events nel formato delle chat
+completion OpenAI; il workspace li mostra come avanzamento della richiesta,
+senza esporre il ragionamento interno del modello.
+
+Il testo generato dal Conversation Agent viene post-processato prima della
+consegna definitiva. Tabelle Search/GDACS, fonti e dashboard Copernicus sono
+aggiunti in un ordine stabile. Lo stream pubblica la versione finale, non una
+bozza priva dell'artefatto; al termine viene inviato il marcatore di chiusura.
+
+\section{Gestione degli errori}
+
+\subsection{Errore di una sorgente}
+
+Ogni chiamata a una sorgente è racchiusa da un contratto di errore. Se GDACS
+non risponde ma Search e STAC terminano correttamente, il grafo conserva i
+risultati disponibili. Il Conversation Agent può produrre una risposta
+parziale e segnalare con precisione la dipendenza mancante.
+
+Anche all'interno di STAC una ricerca partizionata può fallire soltanto per
+alcune aree o finestre temporali. I prodotti ottenuti restano utilizzabili, ma
+la limitazione di copertura deve essere propagata nella risposta e
+nell'artefatto. Una tabella non vuota non dimostra che tutte le partizioni
+abbiano risposto né che il catalogo sia stato esplorato completamente.
+
+Gli errori sono classificati in configurazione, autenticazione, rete, timeout,
+risposta non valida e persistenza. A ciascuno sono associati:
+
+\begin{itemize}
+    \item codice pubblico stabile;
+    \item identificativo diagnostico univoco;
+    \item servizio coinvolto;
+    \item indicazione sulla possibilità di ripetere l'operazione;
+    \item dettaglio tecnico destinato soltanto ai log.
+\end{itemize}
+
+\subsection{Timeout e retry}
+
+I retry sono applicati soltanto agli errori presumibilmente transitori, come
+timeout, problemi di rete, HTTP 429 e HTTP 5xx. Gli errori HTTP 4xx non vengono
+ripetuti automaticamente. Anche il modello remoto dispone di timeout,
+backoff e limite di concorrenza, così che i rami paralleli non saturino il
+runner Ollama.
+
+\subsection{Errore della memoria}
+
+Redis è una dipendenza obbligatoria. L'assenza del checkpointer potrebbe far
+apparire valido un follow-up privo del contesto precedente; il progetto
+preferisce quindi non avviarsi in modalità degradata. L'endpoint readiness
+restituisce errore finché memoria e grafo non sono pronti.
+
+\section{Matrice dei percorsi e delle evidenze}
+
+La Tabella~\ref{tab:matrice-percorsi} collega percorsi tipici alle fonti
+previste. La Tabella~\ref{tab:funzionalita-evidenza} precisa, per le
+funzionalità descritte nel capitolo, quale tipo di evidenza è disponibile:
+molte capacità del prodotto (GDACS, CEMS, follow-up, autenticazione, ripresa
+sessione) non sono misurate dal benchmark del Capitolo~\ref{cap:7}, limitato a
+casi \texttt{graph} e \texttt{acquisitions}.
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabularx}{\textwidth}{
+    >{\bfseries\raggedright\arraybackslash}p{0.25\textwidth}
+    >{\raggedright\arraybackslash}p{0.23\textwidth}
+    >{\raggedright\arraybackslash}X}
+\toprule
+Richiesta & Rami principali & Risultato atteso \\
+\midrule
+Clima in Sicilia &
+Piano operativo &
+Contesto web e acquisizioni secondo il piano selezionato. \\
+\addlinespace
+Dataset orario SST del Mar Nero &
+Discovery su NebulaGraph &
+Risorsa Marine, variabile e metadati di compatibilità. \\
+\addlinespace
+Siccità in Sicilia e acquisizioni &
+Discovery + operativo &
+Risorse Drought/Marine e copertura STAC nella stessa sessione. \\
+\addlinespace
+Terremoti in Indonesia &
+Search + GDACS + STAC &
+Eventi filtrati, contesto web e copertura delle acquisizioni. \\
+\addlinespace
+Dettagli EMSR884 &
+CEMS (+ Search/STAC opz.) &
+Attivazione e prodotti; arricchimento dashboard se abilitato. \\
+\addlinespace
+Grafico dei risultati &
+Chart su contesto &
+Nuova vista senza recuperare nuovamente i dati. \\
+\addlinespace
+Aggiornamento GDACS &
+Refresh GDACS &
+Sostituzione del solo dataset eventi. \\
+\addlinespace
+Ripresa sessione dal workspace &
+Checkpoint Redis &
+Ricarico di filtri, artefatti e cronologia utili. \\
+\addlinespace
+Domanda fuori dominio &
+Gateway &
+Risposta diretta, senza chiamate esterne. \\
+\bottomrule
+\end{tabularx}
+\caption{Esempi di instradamento del workflow e di ripresa sessione.}
+\label{tab:matrice-percorsi}
+\end{table}
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabularx}{\textwidth}{
+    >{\bfseries\raggedright\arraybackslash}p{0.22\textwidth}
+    >{\centering\arraybackslash}p{0.14\textwidth}
+    >{\centering\arraybackslash}p{0.14\textwidth}
+    >{\centering\arraybackslash}p{0.14\textwidth}
+    >{\raggedright\arraybackslash}X}
+\toprule
+Funzionalità & Test mock & Integrazione & Benchmark & Browser \\
+\midrule
+Discovery (grafo) & Parziale & Harvest/repo & Sì (51) & Artefatto \\
+\addlinespace[1pt]
+STAC live & Query/filtri & Client CDSE & Sì (54) & Dashboard \\
+\addlinespace[1pt]
+GDACS / CEMS / web & Normalizz. & MCP/HTTP & No & Scenario \\
+\addlinespace[1pt]
+Follow-up / revisioni & Workflow & API mutazioni & No & Scenario \\
+\addlinespace[1pt]
+Keycloak / sessioni & --- & OIDC & No & Accesso \\
+\addlinespace[1pt]
+Osservabilità & Metriche & Overlay & No & Grafana \\
+\bottomrule
+\end{tabularx}
+\caption{Funzionalità descritte e tipo di evidenza disponibile. ``Benchmark''
+si riferisce al protocollo~6.0 del Capitolo~\ref{cap:7}; ``Browser'' indica
+verifica manuale o screenshot, non misurata dal runner.}
+\label{tab:funzionalita-evidenza}
+\end{table}
+
+\section{Strategia di verifica}
+
+La verifica è organizzata per livelli.
+
+\subsection{Test unitari}
+
+I test unitari controllano normalizzazione dei feed GDACS, sicurezza degli URL,
+query STAC, generazione di grafici, contratti di errore e trasformazioni
+temporali. Per la dashboard verificano inoltre la riparazione di valori e serie
+non validi, il ricalcolo del cross-filter su grafici, KPI, tabella e heatmap, e
+la provenienza delle metriche generate. Queste prove non richiedono una risposta
+creativa dell'LLM e confrontano input e output deterministici.
+
+\subsection{Test del workflow}
+
+I test del grafo sostituiscono le dipendenze remote con mock e verificano:
+
+\begin{itemize}
+    \item selezione delle sorgenti e parallelismo condizionale;
+    \item convergenza dei risultati nel Conversation Agent;
+    \item separazione della memoria per \texttt{thread\_id};
+    \item chiarimenti su richieste incomplete;
+    \item follow-up dal contesto e aggiornamenti selettivi;
+    \item propagazione della risposta finale nello streaming.
+\end{itemize}
+
+\subsection{Test delle integrazioni}
+
+I client MCP e Copernicus sono verificati rispetto a timeout, errori HTTP,
+payload non validi e tentativi limitati. I test dell'integrazione della
+dashboard coprono le chiamate HTTP per chat, mutazioni, annullamento, versioni e
+confronto; quelli degli asset statici verificano i controlli richiudibili e i
+collegamenti agli endpoint nativi.
+
+La guida tecnica del progetto documenta, al 15 ottobre 2026, 103 test superati
+nei moduli \path{test_evals_stats.py}, \path{test_evals_runner_integrity.py},
+\path{test_evals_validation.py} e \path{test_evals_infrastructure.py}, e 32
+test nella suite \path{observability/llmops/tests}
+\cite{guidaProgetto2026}. Sono esiti di sottoinsiemi della suite, non il
+conteggio totale corrente né una riesecuzione compiuta per questa tesi. Le
+prove usano anche dipendenze simulate e non dimostrano da sole il corretto
+funzionamento di tutte le sorgenti live.
+
+Per riprodurre tali controlli occorre conservare ambiente, revisione del codice,
+comando e log dell'esecuzione. Il benchmark del
+Capitolo~\ref{cap:7} aggiunge una misura del workflow su domande di riferimento;
+la verifica dell'interfaccia renderizzata resta un livello separato.
+
+\section{Limiti attuali}
+
+L'architettura riduce alcuni rischi, ma non elimina i limiti delle fonti e dei
+modelli:
+
+\begin{itemize}
+    \item GDACS contiene stime che possono essere aggiornate;
+    \item la presenza di una acquisizione STAC non implica che l'immagine sia
+    adatta a valutare un danno;
+    \item il geocoding può essere ambiguo;
+    \item l'LLM può scegliere una formulazione imprecisa, anche se i dati sono
+    strutturati;
+    \item ricerca web e servizi remoti dipendono dalla rete;
+    \item la qualità della risposta non è misurata soltanto dal superamento
+    dei test software.
+\end{itemize}
+
+Il protocollo implementato aggiunge domande con riferimenti, controlli di
+instradamento e filtri, voti di qualità e statistiche per categoria. Le metriche
+operative permettono inoltre di localizzare latenze e guasti. Queste evidenze
+sostengono conclusioni circoscritte al benchmark e ai percorsi osservati; non
+dimostrano ancora il vantaggio quantitativo del parallelismo o del riuso della
+memoria, per i quali servono confronti controllati.
+
+Restano utili prove conversazionali con controllo del risultato visualizzato.
+La qualità in un impiego reale non può essere dedotta dal solo superamento dei
+test software o dall'assenza di errori tecnici.

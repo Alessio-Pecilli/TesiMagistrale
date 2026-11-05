@@ -1,0 +1,53 @@
+% Classe per tesi di Ingegneria Informatica all'Universita Roma Tre
+\documentclass{TesiDiaUniroma3}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[italian]{babel}
+\usepackage{lmodern}
+\usepackage{microtype}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{array}
+\usepackage[table]{xcolor}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,shapes.geometric,fit,calc,backgrounds}
+\usepackage{url}
+\usepackage{xurl}
+\usepackage[plainpages=false,hidelinks]{hyperref}
+\usepackage[all]{hypcap}
+
+\bibliographystyle{plain}
+
+% Dati del frontespizio.
+\titolo{Agent-based Earth Observation discovery: un approccio multi-agentico per
+l'accesso al dato nei cataloghi di osservazione della terra}
+\autore{Alessio Pecilli}
+\matricola{589232}
+\relatore{Prof. Matteo Rosati}
+\annoAccademico{2025/2026}
+
+\begin{document}
+
+\frontmatter
+\generaFrontespizio
+\include{ringraziamenti}
+\generaIndice
+
+\mainmatter
+\capitolo{Introduzione}{introduzione}
+\capitolo{Dall'intelligenza artificiale agli agenti basati su LLM}{1}
+\capitolo{Model Context Protocol: contesto, strumenti e interoperabilità}{2}
+\capitolo{Fonti informative geospaziali: GDACS e Copernicus}{3}
+\capitolo{Architettura del sistema proposto}{4}
+\capitolo{Funzionamento end-to-end, casi d'uso e verifica}{5}
+\capitolo{Osservabilità del workflow e diagnosi}{6}
+\capitolo{Valutazione con LLM-as-a-Judge}{7}
+\conclusioni{conclusioni}
+
+\backmatter
+\bibliography{bibliografia}
+
+\end{document}
