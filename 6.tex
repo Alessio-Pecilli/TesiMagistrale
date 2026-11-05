@@ -104,10 +104,8 @@ HTTP 200 iniziale può precedere un errore applicativo. Gli esiti separano
 \texttt{completed}, \texttt{error}, \texttt{client\_disconnected} e
 \texttt{interrupted}.
 
-Le route di chat considerate dai pannelli sono \path{/v1/chat/completions} e
-\path{/api/dashboards/{artifact_id}/chat}. Lo stream di avanzamento delle
-valutazioni \path{/api/evals/run-stream} è escluso. Un benchmark può quindi
-produrre workflow e chiamate LLM osservate senza generare campioni di prima
+I pannelli della chat considerano solo le conversazioni degli utenti: un
+benchmark produce workflow e chiamate LLM osservate, ma non campioni di prima
 risposta della chat.
 
 \subsection{Workflow, nodi e dipendenze}
@@ -119,15 +117,8 @@ span dei nodi riportano input/output sintetici e uno stadio logico: intento,
 estrazione, orchestrazione, specialista o sintesi. Le eccezioni di controllo
 del grafo vengono distinte dai guasti ordinari.
 
-I tool MCP sono osservati attraverso \texttt{McpToolClient.call\_tool()}.
-Per il grafo vengono misurati i metodi del repository con prefisso
-\texttt{find\_}, \texttt{list\_} o \texttt{get\_}; le singole chiamate a
-\texttt{NebulaReadClient.execute()} aggiungono span con query e numero di
-righe. Una chiamata del repository può eseguire più istruzioni nGQL: il numero
-di tool GraphDB non coincide necessariamente con il numero di query.
-
-Nel tracing asincrono il contesto viene propagato usando \texttt{ContextVar}.
-Il campo \texttt{session.id}, derivato dal thread, raggruppa in Phoenix più
+Sono osservate anche le chiamate ai tool MCP e le query al catalogo a grafo,
+con la query eseguita e il numero di righe restituite. Il campo \texttt{session.id}, derivato dal thread, raggruppa in Phoenix più
 richieste della stessa conversazione. Non le trasforma in un unico trace
 indefinito. Gli span figli includono tempo già compreso nei padri: una durata
 del workflow di 30 secondi con un figlio di 25 non corrisponde a 55 secondi.
@@ -218,8 +209,7 @@ pannelli, query, unità, descrizioni e soglie. Il provisioning carica sorgente
 Prometheus e dashboard dai file \cite{grafanaProvisioning}. Una modifica
 effettuata soltanto nel browser può essere sovrascritta dal provisioning.
 
-La versione descritta nella guida del 15 ottobre 2026 comprende 28 pannelli
-di dati e sei sezioni. Una guida
+La dashboard è organizzata in sezioni tematiche. Una guida
 espandibile spiega unità, p50/p95, token, coda ed esiti; un promemoria sui
 percentili rimane visibile. Le sezioni operative sono riassunte nella
 Tabella~\ref{tab:viste-osservabilita}.
@@ -248,7 +238,7 @@ HTTP, token e stadi & Freschezza dello scrape, traffico per route, output
 contabilizzato, tempo cumulato e quota 5xx. \\
 \bottomrule
 \end{tabularx}
-\caption{Cinque sezioni di dati, affiancate dalla guida alle metriche.}
+\caption{Sezioni principali della dashboard, affiancate dalla guida alle metriche.}
 \label{tab:viste-osservabilita}
 \end{table}
 

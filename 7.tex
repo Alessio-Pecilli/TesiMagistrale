@@ -4,14 +4,10 @@ un luogo o un periodo sbagliato. Il progetto adotta quindi un benchmark
 ancorato a evidenze, controlli deterministici e un LLM-as-a-Judge. Questo
 capitolo descrive il \textbf{protocollo~6.0} implementato in
 \path{backend/app/evals/} (versione dichiarata in
-\path{dataset/schema.py}) e distingue i conteggi riportati per il dataset corrente dai risultati
-storici riscontrabili nella guida allegata. Gli artefatti originali delle run
-correnti sono descritti dal rapporto di riscontro tecnico del 5 novembre
-2026, che documenta il controllo del JSON e del dataset; i file originali
-restano esterni ai materiali allegati \cite{riscontroTecnico2026}. Per confronto storico, in chiusura si richiamano anche
-le run parziali con protocollo~4.0 documentate nella guida del 15 ottobre 2026
-\cite{guidaProgetto2026}; i due insiemi non sono direttamente sommabili perché
-differiscono per protocollo, hash del dataset e regole di esito.
+\path{dataset/schema.py}) e ne riporta i risultati \cite{riscontroTecnico2026}.
+In chiusura si richiamano, per confronto storico, le run con protocollo~4.0
+\cite{guidaProgetto2026}, che non sono sommabili alle attuali perché
+differiscono per protocollo, dataset e regole di esito.
 
 \begin{figure}[htbp]
 \centering
@@ -310,15 +306,10 @@ un cambiamento a una modifica è utile un confronto A/A della stessa versione.
 
 \subsection{Riepilogo riportato per il protocollo~6.0}
 
-Per il dataset descritto da 105 casi, il riepilogo utilizzato nella stesura
-attribuisce alla run \texttt{eval-run-ca004ba5} i conteggi della
-Tabella~\ref{tab:risultati-6}, con protocollo~6.0, Judge \texttt{gemma3:27b},
-temperatura zero e seed 40. Il rapporto tecnico del 5 novembre documenta
-il riscontro dei conteggi sul JSON originale e il ricalcolo del bootstrap
-con 2.000 ricampionamenti e seed 42 \cite{riscontroTecnico2026}.
-Il seed del bootstrap riguarda il ricampionamento, quello della run
-l'esecuzione del benchmark. Il rapporto costituisce la fonte di riscontro;
-non si tratta di una nuova esecuzione svolta per questa revisione.
+Sul dataset da 105 casi, la run \texttt{eval-run-ca004ba5} (protocollo~6.0,
+agente \texttt{qwen3:8b}, Judge \texttt{gemma3:27b}, temperatura zero, seed 40)
+ha prodotto i conteggi della Tabella~\ref{tab:risultati-6}. Il bootstrap usa
+2.000 ricampionamenti delle famiglie \cite{riscontroTecnico2026}.
 
 \begin{table}[htbp]
 \centering
@@ -336,8 +327,7 @@ Grafo & 31/49 (63,3\%) & 31/51 (60,8\%) & 49,3--75,3\% & 43,8--81,8\% \\
 Acquisizioni & 54/54 (100\%) & 54/54 (100\%) & 93,4--100\% & 100--100\% \\
 \bottomrule
 \end{tabularx}
-\caption{Conteggi della run \texttt{eval-run-ca004ba5}, riscontrati nel rapporto
-tecnico \cite{riscontroTecnico2026}. Il tasso primario esclude i due
+\caption{Conteggi della run \texttt{eval-run-ca004ba5}. Il tasso primario esclude i due
 \texttt{review} del grafo; il rigoroso li include nel denominatore. Wilson sui
 casi valutabili non incorpora la dipendenza fra famiglie; il bootstrap al
 100\% sulle acquisizioni è degenerato (nessun fallimento da ricampionare).}
@@ -346,10 +336,14 @@ casi valutabili non incorpora la dipendenza fra famiglie; il bootstrap al
 
 La differenza tra i due tassi del grafo dipende dai due casi indicati come
 \texttt{review}: il primario esclude questi casi, il rigoroso li include.
-L'intervallo Wilson è ricalcolabile dai conteggi; il rapporto tecnico
-conferma anche gli intervalli bootstrap riportati.
 
-Il riscontro distingue 18 fallimenti del grafo: otto con riferimento assente
+Una seconda run completa con protocollo~6.0, sullo stesso dataset e senza
+strato di validazione, ma con seed 42 (\texttt{721bec34}), ottiene 61,2\% sul grafo e 98,1\% sulle
+acquisizioni \cite{riscontroTecnico2026}. Le due run sono vicine e indicano
+una variabilità di qualche punto percentuale fra esecuzioni; due sole
+ripetizioni non bastano però a stimarla con precisione.
+
+I 18 fallimenti del grafo si distribuiscono così: otto con riferimento assente
 dalla lista, quattro con errore di percorso e mancato recupero, quattro con
 riferimento citato ma voti insufficienti e due con lista vuota. I due casi
 \texttt{review} restano separati dai fallimenti.
@@ -357,6 +351,14 @@ Sui 49 casi valutabili, hit e citazione raggiungono il 71,4\%, hit@1 il
 18,4\% e MRR 0,295. Per le acquisizioni, esclusi i tre casi con riferimento
 vuoto, il recupero completo dei \texttt{core\_ids} è 94,1\% su 51 casi e il
 richiamo medio è 97,4\% \cite{riscontroTecnico2026}.
+
+Le cifre indicano dove intervenire. Sul grafo il riferimento è spesso
+recuperato (hit 71,4\%) ma raramente in prima posizione (hit@1 18,4\%): il
+limite principale è l'ordinamento, non il recupero. Sulle acquisizioni,
+invece, il 100\% segnala un effetto soffitto: il benchmark corrente non è
+abbastanza difficile da distinguere una versione migliore da una peggiore e
+andrebbe esteso con casi più ambigui (luoghi omonimi, periodi relativi,
+combinazioni di filtri).
 
 Precisione geografica e richiamo hanno significati diversi: STAC-017 riceve
 un pass pur recuperando tre dei sei prodotti di riferimento, con quota di
@@ -384,7 +386,11 @@ esterni e giudizi inutilizzabili. Wilson e bootstrap descrivono incertezza sotto
 ipotesi dichiarate; non correggono un Judge sistematicamente errato.
 
 La validità interna risente di euristiche dei controlli, riduzione delle
-evidenze e dipendenze fra casi. La validità esterna rimane limitata da domande
-curate, numerosità delle famiglie e snapshot. Per rafforzare le conclusioni
+evidenze e dipendenze fra casi. Inoltre i riferimenti del grafo sono generati
+a partire dallo stesso catalogo NebulaGraph che l'agente interroga: il
+benchmark misura la capacità di trovare risorse presenti nel catalogo, non la
+completezza del catalogo stesso. La validità esterna rimane limitata da domande
+curate, numerosità delle famiglie e snapshot; il set perturbato non è incluso
+nei risultati di questo capitolo. Per rafforzare le conclusioni
 servono confronti A/A, più scenari indipendenti e verifica dell'interfaccia
 del workspace, che il benchmark a thread nuovo non osserva.

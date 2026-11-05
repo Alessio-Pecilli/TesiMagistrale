@@ -37,7 +37,7 @@ punto sono possibili tre casi:
 Si consideri la domanda:
 
 \begin{quote}
-\emph{``Mostrami i terremoti di magnitudo superiore a 3 avvenuti in Italia
+\emph{``Mostrami i terremoti di magnitudo superiore a 4,5 avvenuti in Italia
 negli ultimi sette giorni e fammi vedere la copertura satellitare.''}
 \end{quote}
 
@@ -49,7 +49,7 @@ Il parser produce una richiesta strutturata simile alla seguente:
     \item categoria: \texttt{hazard}, sottotipo terremoto;
     \item luogo: Italia, con bounding box quando il geocoding è disponibile;
     \item periodo: intervallo assoluto corrispondente agli ultimi sette giorni;
-    \item filtro: magnitudo maggiore di 3;
+    \item filtro: magnitudo maggiore di 4,5;
     \item viste: dati strutturati e mappa.
 \end{itemize}
 
@@ -81,11 +81,10 @@ un censimento completo di tutti i fenomeni nella regione.
 Il client STAC invia una ricerca con bounding box e intervallo ISO 8601. Per
 intervalli o aree estesi può suddividere la richiesta in partizioni temporali
 e quadranti, con limiti sul numero di tentativi. I risultati sono ridotti ai
-metadati utili e sottoposti a deduplicazione. STAC richiede un identificativo
-univoco all'interno della collezione: in una ricerca su più collezioni, il solo
-\texttt{id} non è quindi una chiave globalmente univoca \cite{stacSpec}.
-La deduplicazione della risposta non equivale al riconoscimento di tutte le
-scene relative alla stessa acquisizione fisica.
+metadati utili e deduplicati per identificativo. Il client non segue le
+pagine successive della risposta STAC: per aree o periodi molto ampi il
+numero di prodotti mostrato può quindi essere inferiore a quello disponibile
+nel catalogo, e i conteggi vanno letti come riferiti ai risultati recuperati.
 
 \subsection{Sincronizzazione e risposta}
 
@@ -386,8 +385,8 @@ risposta non valida e persistenza. A ciascuno sono associati:
 \subsection{Timeout e retry}
 
 I retry sono applicati soltanto agli errori presumibilmente transitori, come
-timeout, problemi di rete, HTTP 429 e HTTP 5xx. Gli altri errori HTTP 4xx non vengono ripetuti automaticamente; HTTP 429
-costituisce l'eccezione transitoria già indicata. Anche il modello remoto dispone di timeout,
+timeout, problemi di rete, HTTP 429 e HTTP 5xx; gli altri errori 4xx non
+vengono ripetuti. Anche il modello remoto dispone di timeout,
 backoff e limite di concorrenza, così che i rami paralleli non saturino il
 runner Ollama.
 
@@ -524,17 +523,10 @@ dashboard coprono le chiamate HTTP per chat, mutazioni, annullamento, versioni e
 confronto; quelli degli asset statici verificano i controlli richiudibili e i
 collegamenti agli endpoint nativi.
 
-La guida tecnica del progetto documenta, al 15 ottobre 2026, 103 test superati
-nei moduli \path{test_evals_stats.py}, \path{test_evals_runner_integrity.py},
-\path{test_evals_validation.py} e \path{test_evals_infrastructure.py}, e 32
-test nella suite \path{observability/llmops/tests}
-\cite{guidaProgetto2026}. Sono esiti di sottoinsiemi della suite, non il
-conteggio totale corrente né una riesecuzione compiuta per questa tesi. Le
-prove usano anche dipendenze simulate e non dimostrano da sole il corretto
-funzionamento di tutte le sorgenti live.
-
-Per riprodurre tali controlli occorre conservare ambiente, revisione del codice,
-comando e log dell'esecuzione. Il benchmark del
+Al 15 ottobre 2026 risultavano superati, fra gli altri, 103 test del modulo di
+valutazione e 32 test del pacchetto di osservabilità \cite{guidaProgetto2026}.
+Poiché molte prove usano dipendenze simulate, non dimostrano da sole il
+corretto funzionamento delle sorgenti live. Il benchmark del
 Capitolo~\ref{cap:7} aggiunge una misura del workflow su domande di riferimento;
 la verifica dell'interfaccia renderizzata resta un livello separato.
 

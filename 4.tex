@@ -372,13 +372,11 @@ compatibilità spaziale e temporale, tipo di risorsa, servizio preferito), con
 penalità per incompatibilità e normalizzazione finale in $[0,1]$. La selezione
 ammette candidati con punteggio almeno $\max(0{,}28,\mathrm{best}-0{,}20)$ e
 al più 30 risorse; se sono richieste più variabili esplicite, viene forzata la
-presenza di un rappresentante per ciascuna. La descrizione disponibile non riporta qui la formula completa, i pesi,
-l'ordine dei candidati prima del limite e la gestione dei pareggi: soglie e
-feature non bastano quindi a riprodurre lo score. Il trattamento dei metadati
-assenti e la regola sulle variabili richiedono verifica nel codice prima di
-interpretarli come garanzia di compatibilità. Il nome ``Agent'' identifica una
-responsabilità del workflow, non un componente che effettua inferenza
-linguistica.
+presenza di un rappresentante per ciascuna. Le regole sono semplici e
+ispezionabili, ma non apprese: come mostrano le metriche di ordinamento del
+Capitolo~\ref{cap:7}, il ranking è il punto più debole della Discovery. Il nome
+``Agent'' identifica una responsabilità del workflow, non un componente che
+effettua inferenza linguistica.
 
 Il repository limita ogni interrogazione a 120 righe; il servizio conserva al
 massimo 30 candidati prima del ranking. Il ranking può quindi ordinare soltanto
@@ -434,12 +432,7 @@ equivalenze fra ogni variabile Marine e ogni indicatore Drought.
 
 Ogni harvester raccoglie e normalizza i metadati in un
 \texttt{GraphPayload}, poi il repository esegue upsert di vertici e archi.
-Le definizioni operative dello schema sono nei file
-\path{marine/app/graph/schema.ngql}, \path{space/app/schema.ngql} e
-\path{drought/app/schema.ngql}, relativi a \path{copernicus-harvester/}.
-I file numerati sotto \path{nebula/schema/} dello stesso harvester sono
-segnaposto nella revisione documentata: non vanno confusi con gli schemi
-effettivamente applicati.
+Ogni harvester definisce lo schema del proprio sottografo.
 
 I campi \texttt{first\_seen\_at}, \texttt{last\_seen\_at} e
 \texttt{last\_harvested\_at} descrivono prima osservazione, ultima presenza e
@@ -447,9 +440,9 @@ ultima elaborazione; \texttt{metadata\_hash} permette di riconoscere cambiamenti
 La riconciliazione può mantenere risorse scomparse con \texttt{active=false}.
 Per una vista corrente occorre filtrare sia vertici sia archi attivi.
 
-Sono presenti protezioni contro rimozioni anomale: la soglia predefinita è il
-25\%, applicata a categorie Marine con almeno 20 vertici, collezioni STAC con
-almeno 10 e layer Drought con almeno 5. Gli item STAC sono accumulati per
+Una protezione contro rimozioni anomale tratta come sospetto un harvest che
+farebbe sparire più di un quarto delle risorse di una categoria.
+Gli item STAC sono accumulati per
 finestre incrementali: l'assenza in una finestra recente non ne prova la
 scomparsa dal catalogo globale. Un limite di sicurezza raggiunto deve emergere
 come errore, anziché essere presentato come raccolta completa.
@@ -460,9 +453,8 @@ correnti, senza conservare tutte le revisioni precedenti. Timestamp e flag di
 attività rendono lo stato ispezionabile, ma non permettono di ricostruire
 qualsiasi snapshot storico.
 
-La pianificazione del profilo \texttt{harvest} prevede Marine alle 02:00, STAC
-alle 03:00 e Drought alle 03:30, con fuso predefinito Europe/Rome. Lock,
-timeout, tentativi limitati e file di stato controllano l'esecuzione; la salute
+Gli harvester vengono eseguiti ogni notte dal profilo \texttt{harvest}. Lock,
+timeout e tentativi limitati controllano l'esecuzione; la salute
 del catalogo richiede anche la freschezza dell'ultimo job riuscito, oltre alla
 raggiungibilità del database \cite{guidaProgetto2026}.
 
@@ -470,18 +462,9 @@ raggiungibilità del database \cite{guidaProgetto2026}.
 
 NebulaGraph separa gestione dello schema (\texttt{metad}), conservazione dei
 dati (\texttt{storaged}) ed esecuzione delle query (\texttt{graphd})
-\cite{nebulaArchitecture}. Il Compose usa la versione predefinita 3.8.0, un
-servizio per ruolo e volumi persistenti per metadati e storage. Lo space creato
-dal client Marine prevede dieci partizioni, identificativi
-\texttt{FIXED\_STRING(256)} e \texttt{replica\_factor=1}: la separazione dei
-processi non fornisce da sola alta disponibilità.
-
-I container si collegano a \texttt{nebula-graphd:9669}; dall'host la porta è
-pubblicata secondo \texttt{NEBULA\_HOST\_PORT}. Il servizio
-\texttt{nebula-storage-activator} registra lo storage e termina con successo;
-il suo stato normale è quindi un processo concluso. Occorre inoltre allineare
-\texttt{NEBULA\_SPACE}: il default Marine fuori Compose è
-\texttt{copernicus}, diverso da quello del backend.
+\cite{nebulaArchitecture}. Il prototipo usa NebulaGraph 3.8.0 con un'istanza
+per ciascun servizio e una sola replica dei dati: la configurazione è adatta
+allo sviluppo, non offre alta disponibilità.
 
 La Discovery usa query predisposte dal codice, tramite
 \path{repositories/copernicus_graph.py} e
@@ -638,10 +621,12 @@ viene riaperta.
 
 Queste regole non sostituiscono la validazione semantica: prima di salvare una
 modifica, il Validator controlla l'allineamento di etichette, valori e serie.
-Un valore mancante e uno zero osservato hanno significati diversi: una
-riparazione di formato non deve essere interpretata come recupero del dato.
-La validazione del payload è strutturale e non costituisce da sola una
-garanzia di correttezza semantica dei dati.
+Nella versione attuale il Validator sostituisce con zero i valori non
+numerici o mancanti e segnala la riparazione. Questo rende il grafico sempre
+disegnabile, ma confonde un dato assente con uno zero osservato: una
+miglioria naturale è escludere tali valori e mostrarli come mancanti. La
+validazione resta quindi strutturale e non garantisce da sola la correttezza
+dei dati.
 Ogni grafico offre anche una tabella dei
 dati e l'esportazione CSV, così che il risultato visivo resti verificabile.
 
@@ -712,9 +697,12 @@ fonti esterne:
     \texttt{request\_id}/\texttt{thread\_id} e header diagnostici.
 \end{itemize}
 
-Il prototipo è descritto nella configurazione di sviluppo: l'accesso OIDC
-all'interfaccia e la separazione dei checkpoint per conversazione non
-costituiscono una valutazione della sicurezza delle API in produzione.
+Il prototipo è pensato per un ambiente di sviluppo e ha un limite di sicurezza
+esplicito: Keycloak protegge l'interfaccia, ma le API del backend non
+verificano il token né il proprietario dell'artefatto. Chi conosce
+l'identificativo di un artefatto può quindi leggerlo. Prima di un uso
+multiutente servono la verifica del token sulle API e il controllo del
+proprietario su conversazioni e artefatti.
 
 I log strutturati includono \texttt{request\_id}, \texttt{thread\_id},
 servizio, durata, codice di errore e possibilità di retry. Gli endpoint
