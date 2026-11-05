@@ -173,9 +173,10 @@ dall'applicazione e non dal protocollo.
 \section{Criteri adottati nel progetto}
 
 I tool implementati sono piccoli, di sola lettura e dotati di schemi di input
-espliciti. Le credenziali e gli URL delle sorgenti non vengono inclusi nel
-contesto del modello; i risultati conservano invece identificativi, timestamp e
-collegamenti necessari alla verifica. I test dei client coprono risposte vuote,
+espliciti. Le credenziali e gli indirizzi interni dei servizi restano nella
+configurazione applicativa. I risultati possono invece includere URL pubblici
+delle risorse, identificativi e timestamp necessari alla verifica: il divieto
+di esporre credenziali non implica l'assenza di collegamenti nel contesto. I test dei client coprono risposte vuote,
 payload non validi, timeout e codici HTTP transitori. Queste proprietà non
 derivano automaticamente dall'adozione di MCP, ma dalla progettazione dei
 singoli server e dell'host.

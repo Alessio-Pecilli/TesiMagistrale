@@ -218,8 +218,9 @@ integrazioni e acquisirne il risultato.
 I ruoli dello stack sono già riepilogati nella
 Tabella~\ref{tab:tecnologie-abilitanti}. In questa architettura LangGraph e Redis
 costituiscono il nucleo stateful, FastAPI espone il servizio e Pydantic delimita
-i contratti; MCP, STAC, ECharts e Leaflet intervengono invece nei punti di
-integrazione e presentazione indicati in Figura~\ref{fig:architettura-complessiva}.
+i contratti. Le fonti e le dipendenze principali sono riassunte in
+Figura~\ref{fig:architettura-complessiva}; ECharts e Leaflet sono invece
+librerie di presentazione usate dal browser.
 
 \section{Organizzazione del backend e del frontend}
 
@@ -291,7 +292,8 @@ percorso operativo. Nel secondo caso il piano seleziona i worker necessari.
         {risposta diretta fuori dominio} (out.west);
 \end{tikzpicture}}
 \caption{Due percorsi di una nuova richiesta ammessa. Il disegno sintetizza i
-rami e omette i dettagli dei follow-up e dei nodi finali di verifica.}
+rami e omette i dettagli dei follow-up, dei nodi finali di verifica e della
+dipendenza CEMS--STAC descritta nel testo.}
 \label{fig:workflow-principale}
 \end{figure}
 
@@ -653,8 +655,9 @@ scopre e invoca i tool tramite un client comune. Gli strumenti principali sono:
     \item elenco, sintesi e dettaglio delle attivazioni CEMS.
 \end{itemize}
 
-Gli URL e le credenziali restano nella configurazione dei servizi e non vengono
-passati al modello. Il client applica timeout; i servizi applicano retry
+Gli indirizzi interni e le credenziali restano nella configurazione dei
+servizi e non vengono passati al modello. I collegamenti pubblici ai prodotti
+o alle schede ufficiali possono invece comparire nei risultati. Il client applica timeout; i servizi applicano retry
 limitati agli errori transitori, evitando di ripetere richieste errate.
 
 \section{Distribuzione tramite container}

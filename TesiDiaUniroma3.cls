@@ -24,7 +24,7 @@
 
 
 \NeedsTeXFormat{LaTeX2e}[1995/12/01]
-\ProvidesPackage{TesiDiaUniroma3}[2023/11/06 v2.0 Tesi - DIA-Uniroma3]
+\ProvidesClass{TesiDiaUniroma3}[2023/11/06 v2.0 Tesi - DIA-Uniroma3]
 
 \LoadClass[a4paper,11pt,oneside,italian]{memoir}
 
@@ -41,21 +41,21 @@
 \linespread{1.4}
 % margini (la dimensione del blocco di testo viene regolata di conseguenza)
 \setlrmarginsandblock{3.5cm}{3cm}{*}
-% profondità dell'indice (settato per stampare fino alle sottosezioni)
+% profondità dell'indice: capitoli e sezioni
 \setcounter{tocdepth}{1}
 % numera parti, capitoli, sezioni, sottosezioni e sotto-sottosezioni
 \maxsecnumdepth{subsubsection}
 \setsecnumdepth{subsubsection}
 
-% header personalizzati
-\let\footruleskip\relax % for compatibility of memoir and fancyhdr
-\let\rm\rmfamily        % for compatibility of memoir and blindtext (demo only)
-\usepackage{fancyhdr}
-\pagestyle{fancy}
-\fancyhf{}
-\addtolength{\headheight}{14pt}
-\fancyhead[R]{\textbf{\thepage}}
-\fancyhead[L]{\parbox[b]{0.90\textwidth}{\small\textbf{\leftmark}}}
+% Intestazioni con gli strumenti nativi di memoir.
+\makepagestyle{tesi}
+\setlength{\headheight}{28pt}
+\makeoddhead{tesi}{\parbox[b]{0.90\textwidth}{\small\bfseries\leftmark}}{}{\bfseries\thepage}
+\makeevenhead{tesi}{\parbox[b]{0.90\textwidth}{\small\bfseries\leftmark}}{}{\bfseries\thepage}
+\makeheadrule{tesi}{\textwidth}{0.4pt}
+\makeoddfoot{tesi}{}{}{}
+\makeevenfoot{tesi}{}{}{}
+\pagestyle{tesi}
 
 \usepackage{adjustbox}
 
@@ -139,12 +139,13 @@
 \newcommand{\ringraziamenti}[1]{\newpage \chapter*{Ringraziamenti} \input{#1}}
 \newcommand{\introduzione}[1]{\newpage \chapter{Introduzione} \input{#1}}
 \newcommand{\conclusioni}[1]{\newpage \chapter{Conclusioni e sviluppi futuri} \markboth{CONCLUSIONI E SVILUPPI FUTURI}{CONCLUSIONI E SVILUPPI FUTURI} \input{#1}}
-\newcommand{\capitolo}[2]{\newpage \chapter{#1}\label{cap:#2}\input{#2}}
+\newcommand{\capitolo}[2]{\newpage \chapter{#1}\label{cap:#2}\markboth{\MakeUppercase{\chaptername\ \thechapter.\ #1}}{}\input{#2}}
 
 % Comandi riguardanti la generazione di indici
 \newcommand{\generaIndice}{
 	%\fancyhead[L]{\textbf{\rightmark}}
 	\newpage
+	\markboth{Indice}{}
 	\tableofcontents
 	\clearpage
 	%\fancyhead[L]{\textbf{\leftmark}}

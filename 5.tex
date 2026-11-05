@@ -2,7 +2,7 @@ Per collegare l'architettura al comportamento osservabile, il capitolo segue
 alcune richieste dall'ingresso in \emph{Copernicus Data Workspace} fino alla
 risposta. Gli scenari sono ricavati dai contratti e dai rami implementati nel
 codice; i valori citati illustrano il flusso e non costituiscono risultati
-relativi a un evento reale. I risultati di benchmark documentati sono presentati
+relativi a un evento reale. I risultati di benchmark riportati sono presentati
 separatamente nel Capitolo~\ref{cap:7}.
 
 \section{Ingresso della richiesta}
@@ -12,8 +12,9 @@ una nuova analisi; può anche riprendere un'indagine precedente che conserva
 dashboard, filtri e contesto. La dashboard invia i messaggi al backend mediante
 l'endpoint compatibile con le chat completion OpenAI. La richiesta contiene
 modello, cronologia, opzione di streaming e metadati utili a ricavare
-l'identificativo della conversazione. Il backend anonimizza e normalizza tale
-identificativo, quindi invoca il \texttt{WorkflowAgent}.
+l'identificativo della conversazione. Il backend normalizza tale
+identificativo, quindi invoca il \texttt{WorkflowAgent}. La normalizzazione o
+l'eventuale trasformazione in hash non dimostrano l'anonimato della conversazione.
 
 Nel client legacy Open WebUI possono comparire anche richieste tecniche
 generate dall'interfaccia (titolo della chat, suggerimenti). Questi task non
@@ -79,8 +80,11 @@ un censimento completo di tutti i fenomeni nella regione.
 
 Il client STAC invia una ricerca con bounding box e intervallo ISO 8601. Per
 intervalli o aree estesi può suddividere la richiesta in partizioni temporali
-e quadranti, con limiti sul numero di tentativi. I risultati sono deduplicati
-per identificativo e ridotti ai metadati utili.
+e quadranti, con limiti sul numero di tentativi. I risultati sono ridotti ai
+metadati utili e sottoposti a deduplicazione. STAC richiede un identificativo
+univoco all'interno della collezione: in una ricerca su più collezioni, il solo
+\texttt{id} non è quindi una chiave globalmente univoca \cite{stacSpec}.
+La chiave effettivamente usata dal client richiede riscontro nel codice.
 
 \subsection{Sincronizzazione e risposta}
 
@@ -166,8 +170,11 @@ Dopo una prima risposta l'utente può scrivere:
 \emph{``Ora raggruppali per giorno e mostrami un grafico a barre.''}
 \end{quote}
 
-Il messaggio dipende dal contesto: il pronome ``li'' si riferisce al dataset
-precedente. Il Gateway riceve una vista compatta dello stato e riconosce la
+Il messaggio dipende dal contesto. Nell'esempio si assume che l'artefatto
+selezionato sia quello delle acquisizioni STAC; se il turno precedente
+conteneva anche eventi GDACS, il pronome ``li'' da solo non identifica una
+sorgente univoca. In assenza di un riferimento sufficiente occorre chiedere
+quale dataset raggruppare. Il Gateway riceve una vista compatta dello stato e riconosce la
 continuità del dominio. Il Conversation Agent pianifica quindi una delle
 azioni di follow-up:
 
@@ -184,9 +191,10 @@ Nel caso dell'esempio non è necessario ripetere le chiamate GDACS e STAC. Il
 Chart Agent usa il dataset conservato in Redis e aggiorna la visualizzazione.
 Se l'utente opera nella dashboard, il Composer traduce il comando in una
 mutazione tipizzata e il backend salva una nuova revisione dell'artefatto.
-Questo comportamento riduce latenza, traffico verso servizi esterni e
-possibilità che un aggiornamento involontario renda incoerenti due turni
-consecutivi.
+Il riuso evita nuove chiamate alle sorgenti e può ridurre il traffico e la
+latenza associati al recupero. Il beneficio netto sui tempi richiede una
+misura controllata; rimangono inoltre l'età dei dati e la necessità di un
+aggiornamento esplicito quando l'utente richiede informazioni correnti.
 
 \begin{figure}[htbp]
 \centering
@@ -378,7 +386,7 @@ risposta non valida e persistenza. A ciascuno sono associati:
 
 I retry sono applicati soltanto agli errori presumibilmente transitori, come
 timeout, problemi di rete, HTTP 429 e HTTP 5xx. Gli altri errori HTTP 4xx non vengono ripetuti automaticamente; HTTP 429
-costituisce l\'eccezione transitoria già indicata. Anche il modello remoto dispone di timeout,
+costituisce l'eccezione transitoria già indicata. Anche il modello remoto dispone di timeout,
 backoff e limite di concorrenza, così che i rami paralleli non saturino il
 runner Ollama.
 
@@ -410,7 +418,7 @@ Richiesta & Rami principali & Risultato atteso \\
 \midrule
 Clima in Sicilia &
 Piano operativo &
-Contesto web e acquisizioni secondo il piano selezionato. \\
+Contesto web e acquisizioni secondo il piano; nessuna stima climatica dai raster. \\
 \addlinespace
 Dataset orario SST del Mar Nero &
 Discovery su NebulaGraph &
@@ -418,7 +426,7 @@ Risorsa Marine, variabile e metadati di compatibilità. \\
 \addlinespace
 Siccità in Sicilia e acquisizioni &
 Discovery + operativo &
-Risorse Drought/Marine e copertura STAC nella stessa sessione. \\
+Risorse Drought pertinenti e acquisizioni STAC nella stessa sessione. \\
 \addlinespace
 Terremoti in Indonesia &
 Search + GDACS + STAC &

@@ -33,4 +33,4 @@ I file temporanei di compilazione sono esclusi dal repository tramite il `.gitig
 
 ## Stato della verifica
 
-La revisione del 5 novembre 2026 corregge citazioni, struttura, terminologia e impaginazione e ricompila il PDF. La versione iniziale rimane nella cronologia Git. Il repository non contiene il backend del prototipo né i JSON originali delle run del benchmark: i risultati sono qualificati secondo le evidenze disponibili e i controlli ancora necessari sono elencati in `VERIFICHE_CODICE.md`. Non sono stati inventati dati o eseguiti nuovi benchmark.
+La revisione del 5 novembre 2026 corregge citazioni, struttura, terminologia e impaginazione e ricompila il PDF. Una seconda lettura integrale verifica anche formule, collegamenti e coerenza delle conclusioni; gli esiti sono nel rapporto. La versione iniziale rimane nella cronologia Git. Il repository non contiene il backend del prototipo né i JSON originali delle run del benchmark: i risultati sono qualificati secondo le evidenze disponibili e i controlli ancora necessari sono elencati in `VERIFICHE_CODICE.md`. Non sono stati inventati dati o eseguiti nuovi benchmark.

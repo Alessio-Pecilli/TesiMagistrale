@@ -52,7 +52,7 @@ La documentazione di una tecnologia non dimostra che il prototipo la implementi 
 ## Controlli eseguiti
 
 - Compilazione completa pdfLaTeX, BibTeX e passaggi aggiuntivi per stabilizzare rimandi e bibliografia.
-- 42 voci bibliografiche, 38 chiavi citate, nessuna chiave citata mancante o duplicata.
+- 40 voci bibliografiche, 40 chiavi citate, nessuna chiave citata mancante o duplicata.
 - Nessuna citazione o riferimento incrociato irrisolto nell'ultimo log.
 - Nessun overfull/underfull box nell'ultimo log.
 - Tutte le immagini richiamate sono presenti.
@@ -66,3 +66,48 @@ La documentazione di una tecnologia non dimostra che il prototipo la implementi 
 I risultati individuali delle run, il ranking, le politiche sui dati mancanti, i privilegi, le integrazioni e i test del prototipo richiedono i materiali elencati in VERIFICHE_CODICE.md. Non sono stati eseguiti nuovi benchmark, validazione umana del Judge, baseline multiagente o collaudi del workspace live. Queste attività restano esplicitamente da svolgere.
 
 La revisione rende il documento più coerente con le evidenze disponibili; non certifica una perfezione scientifica assoluta o il funzionamento del software non esaminato.
+
+
+## Secondo controllo completo
+
+Su richiesta dell'autore è stata eseguita una seconda lettura integrale dei capitoli e della bibliografia, con nuovi controlli di coerenza, formule, collegamenti, sorgenti e PDF. Sono state applicate ulteriori correzioni:
+
+1. Uniformata la definizione di agente nell'apertura del capitolo teorico e nella motivazione del titolo; definita la dimensione d_k dell'attenzione.
+2. Chiarito che un follow-up dopo risultati multisorgente richiede un artefatto selezionato o un chiarimento; attenuata l'affermazione non misurata sui vantaggi di latenza della memoria.
+3. Distinte normalizzazione/hash e anonimizzazione della conversazione.
+4. Precisata l'unicità degli id STAC entro la collezione e registrato il controllo necessario sulla deduplicazione del client. Fonte: [specifica Item 1.1.0](https://raw.githubusercontent.com/radiantearth/stac-spec/v1.1.0/item-spec/item-spec.md).
+5. Corretta dimensionalmente la velocità Ollama: le durate sono in nanosecondi, perciò token/s richiede 10^9 * eval_count / eval_duration. Fonte: [API Usage](https://docs.ollama.com/api/usage). Nessun comportamento del client è stato dichiarato verificato da questa correzione teorica.
+6. Esplicitate definizioni di hit/hit@1/MRR, casi senza riferimento recuperato, precisione/richiamo, denominatori vuoti e differenza tra media dei rapporti e rapporto dei totali.
+7. Precisate le ipotesi di Wilcoxon e l'uso di McNemar e Holm; aggiunta fonte specifica [multipletests](https://www.statsmodels.org/stable/generated/statsmodels.stats.multitest.multipletests.html).
+8. Uniformate le conclusioni alla natura riportata dei conteggi, evitando di qualificare come verificata la completezza della run.
+9. Distinti indirizzi interni dei servizi e link pubblici ai prodotti; corretti rinvii a figure che non rappresentavano le librerie frontend e dichiarata la dipendenza CEMS--STAC omessa nel diagramma sintetico.
+10. Corretto il refuso «somabili» e l'apostrofo LaTeX che rendeva impropriamente «l'eccezione»; chiariti gli esempi clima/siccità senza attribuire analisi scientifiche a semplici metadati.
+11. Rimossi quattro riferimenti non citati; uniformate le date di consultazione mancanti; classificato Zheng et al. come contributo a proceedings, mantenendone autori, titolo e anno; reso cliccabile il DOI McNemar.
+12. Sostituito fancyhdr con lo stile nativo di memoir, ripristinate le intestazioni dei capitoli senza collisione col numero di pagina e compattata la bibliografia senza ridurre il corpo del testo. Aggiunti metadati PDF di titolo/autore/argomento.
+
+Il controllo iniziale di tutti i 36 URL HTTPS allora presenti nel PDF ha ottenuto 35 risposte HTTP 200 e un HTTP 403 sul blog Microsoft. Il 403 è un limite dell'accesso automatico, non prova che la fonte sia inesistente: il contenuto era consultabile tramite lo strumento web. Il DOI McNemar resta soggetto ai limiti di accesso già dichiarati. Gli indirizzi localhost documentano l'avvio locale e non vengono verificati come servizi pubblici.
+
+Tutti i controlli che richiedono codice aggiunti durante questa passata sono nella sezione «Integrazioni del secondo controllo» di VERIFICHE_CODICE.md. Non sono stati eseguiti esperimenti aggiuntivi. La revisione non trasforma informazioni riportate o descrizioni del progetto in evidenze di funzionamento live.
+
+
+### Esito sulla versione finale ricompilata
+
+| Controllo | Esito |
+|---|---|
+| Pagine PDF | 91 |
+| Voci bibliografiche / chiavi citate | 40 / 40 |
+| Citazioni mancanti o riferimenti non usati | Nessuno |
+| Rimandi irrisolti / etichette duplicate | Nessuno |
+| Immagini richiamate mancanti | Nessuna |
+| Collegamenti PDF verificati strutturalmente | 224 |
+| URL distinti presenti (incluso localhost illustrativo) | 40 |
+| Collegamenti interni con destinazione fuori documento | Nessuno |
+| Testo rilevato fuori dai limiti della pagina | Nessuno |
+| Caratteri di sostituzione rilevati nell'estrazione | Nessuno |
+| Avvisi LaTeX/BibTeX, overfull/underfull e rimandi indefiniti | Nessuno nell'ultima compilazione |
+| Copie main.pdf / tesi-aggiornata.pdf | Identiche |
+| Metadati PDF | Titolo, autore, argomento e parole chiave presenti |
+
+Tutte le 91 pagine finali sono state renderizzate con Poppler e controllate nelle tavole d'insieme; formule, diagrammi e passaggi modificati sono stati riesaminati anche a dimensione leggibile. Il controllo strutturale dei link interni non equivale a garantire disponibilità futura degli URL esterni.
+
+SHA-256 dei PDF finali: `ebc9276350d73aaea50591fd1e0592ae34f137f56ce6597b479be3fa0a063c2a`.

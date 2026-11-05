@@ -69,3 +69,13 @@ Queste attività richiedono esecuzioni e non possono essere risolte con sole mod
 6. Prove controllate di guasto remoto, timeout, indisponibilità memoria e accesso non autorizzato.
 
 La versione originale dei sorgenti e del rapporto iniziale è conservata nel commit di importazione. I valori rimossi dal testo per mancanza di riscontro possono essere reinseriti dopo la verifica, citando gli artefatti originali.
+
+
+## Integrazioni del secondo controllo
+
+- **Chiave di deduplicazione STAC:** verificare che la combinazione collezione/id (o altra chiave equivalente documentata) eviti collisioni tra collezioni. Il solo id è garantito univoco dalla specifica soltanto entro la collezione.
+- **Tempi Ollama:** verificare la conversione da nanosecondi a secondi prima di calcolare token/s; confermare trattamento di durata zero, dati mancanti e risposta troncata.
+- **Anonimizzazione:** distinguere normalizzazione, hashing e pseudonimizzazione; verificare se identificativi, prompt o trace consentano ancora di ricollegare una conversazione a una persona.
+- **Follow-up multisorgente:** verificare quale artefatto risolva il pronome dopo un turno con eventi e acquisizioni e se venga richiesto un chiarimento quando il riferimento è ambiguo.
+- **Statistiche:** verificare N effettivo di hit/hit@1/MRR, gestione del riferimento assente, convenzioni su insiemi vuoti e media per caso rispetto a rapporto dei totali; documentare ipotesi Wilcoxon e famiglia di ipotesi della correzione Holm.
+- **Diagrammi e implementazione:** verificare rispondenza del flusso CEMS--STAC, delimitazione degli indirizzi interni rispetto ai link pubblici e passaggio dell'artefatto attraverso le API.

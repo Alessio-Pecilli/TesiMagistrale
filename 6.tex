@@ -141,9 +141,15 @@ chiamate in corso può comprendere richieste in coda e non implica altrettante
 inferenze simultanee.
 
 I conteggi dei token provengono dai campi Ollama \path{prompt_eval_count}
-ed \path{eval_count} del corpo catturato. La velocità di inferenza della
-singola chiamata è il rapporto fra token generati e
-\texttt{eval\_duration}. Il tasso di output registrato per agente in una
+ed \path{eval_count} del corpo catturato. Ollama esprime le durate in
+nanosecondi \cite{ollamaUsage}. Per una durata positiva, la velocità di
+generazione della singola chiamata in token al secondo è quindi:
+\[
+ v_{\mathrm{output}}=
+ \frac{10^9\,\texttt{eval\_count}}{\texttt{eval\_duration}}.
+\]
+Se durata o conteggio non sono disponibili, la misura non può essere
+ricostruita. Il tasso di output registrato per agente in una
 finestra comprende invece anche i periodi senza attività. Le due quantità
 possono avere unità token/s e significati diversi.
 

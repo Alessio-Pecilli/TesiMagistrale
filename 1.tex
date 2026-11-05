@@ -1,7 +1,7 @@
 La progettazione dell'assistente descritto in questa tesi richiede di distinguere
 il modello linguistico dal sistema che lo utilizza. Un LLM genera testo a partire
-dal contesto ricevuto; un agente, invece, mantiene uno stato, sceglie strumenti,
-osserva l'esito delle proprie azioni e decide come proseguire. Il capitolo
+dal contesto ricevuto; nel prototipo il ciclo agentivo aggiunge gestione dello
+stato, scelta degli strumenti e osservazione degli esiti. Il capitolo
 concentra la discussione sull'apprendimento statistico, sull'architettura
 Transformer e sui limiti degli LLM isolati, per poi tornare alla nozione di
 agente adottata nel progetto.
@@ -137,7 +137,9 @@ ricorrenti elaborano la sequenza un elemento alla volta e mantengono uno stato
 nascosto, con minori possibilità di parallelizzare l'addestramento e difficoltà
 nel rappresentare dipendenze molto lunghe.
 
-Il Transformer usa invece il meccanismo di self-attention. Ogni token costruisce una rappresentazione guardando gli altri token del contesto e pesandoli in base alla loro rilevanza. In forma semplificata, l'attenzione usa tre matrici: query $Q$, key $K$ e value $V$. Il punteggio tra un token e un altro viene calcolato confrontando query e key; i value vengono poi combinati con pesi normalizzati:
+Il Transformer usa invece il meccanismo di self-attention. Ogni token costruisce una rappresentazione guardando gli altri token del contesto e pesandoli in base alla loro rilevanza. In forma semplificata, l'attenzione usa tre matrici: query $Q$, key $K$ e value $V$. Il punteggio tra un token e un altro viene calcolato confrontando query e key;
+se $d_k$ è la dimensione delle key per testa, i value vengono combinati con
+pesi normalizzati:
 \[
     \mathrm{Attention}(Q,K,V) = \mathrm{softmax}\left(\frac{QK^T}{\sqrt{d_k}}\right)V
 \]

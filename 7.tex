@@ -9,7 +9,7 @@ storici riscontrabili nella guida allegata. Gli artefatti originali delle run
 correnti non sono inclusi nei materiali di questa stesura: i conteggi possono
 essere controllati aritmeticamente, ma non ricostruiti caso per caso. Per confronto storico, in chiusura si richiamano anche
 le run parziali con protocollo~4.0 documentate nella guida del 15 ottobre 2026
-\cite{guidaProgetto2026}; i due insiemi non sono direttamente somabili perché
+\cite{guidaProgetto2026}; i due insiemi non sono direttamente sommabili perché
 differiscono per protocollo, hash del dataset e regole di esito.
 
 \begin{figure}[htbp]
@@ -223,7 +223,7 @@ con \texttt{partial=true}. Le sintesi di grafo e acquisizioni restano separate.
 
 \subsection{Intervallo di Wilson}
 
-Per $n=P+F$ casi valutabili e proporzione osservata $\hat p=P/n$,
+Per $n=P+F>0$ casi valutabili e proporzione osservata $\hat p=P/n$,
 l'intervallo di Wilson al 95\% usa $z\simeq1{,}96$:
 \begin{equation}
  \frac{\hat p+z^2/(2n)\ \pm\
@@ -258,6 +258,25 @@ riferimento. Per le acquisizioni si misurano copertura dei \texttt{core\_ids} e
 indicatori di recupero sul luogo. Questi indicatori dipendono dalla scelta del
 riferimento e non misurano tutta la disponibilità globale del catalogo.
 
+Per interpretare gli indicatori del grafo, si considerino $N>0$ casi e la
+posizione $r_i$ del primo risultato pertinente nel caso $i$. Se il riferimento
+non è recuperato, si pone $r_i=\infty$ e si assume $1/r_i=0$. Con
+$\mathbf{1}[\cdot]$ funzione indicatrice, le definizioni usuali sono:
+\[
+ \mathrm{hit}=\frac{1}{N}\sum_i\mathbf{1}[r_i<\infty],\qquad
+ \mathrm{hit@1}=\frac{1}{N}\sum_i\mathbf{1}[r_i=1],\qquad
+ \mathrm{MRR}=\frac{1}{N}\sum_i\frac{1}{r_i}.
+\]
+La citazione misura separatamente se il riferimento compare nella risposta
+finale: presenza nella lista recuperata e menzione nella sintesi non sono
+la stessa proprietà. Per le acquisizioni, il richiamo sul riferimento è
+il rapporto tra \texttt{core\_ids} recuperati e \texttt{core\_ids} attesi,
+quando l'insieme atteso non è vuoto. La quota sul luogo usa invece al
+denominatore i prodotti recuperati. Con insiemi vuoti la convenzione deve
+essere dichiarata; una media dei rapporti per caso e un rapporto dei totali
+non sono intercambiabili. I denominatori effettivi e la gestione delle
+esclusioni restano da riscontrare negli artefatti del benchmark.
+
 \section{Confronti e ripetizioni}
 
 \subsection{Riproducibilità e stabilità}
@@ -274,10 +293,16 @@ Il confronto ammette run dello \emph{stesso} protocollo, stesso Judge e almeno
 20 coppie valutabili per categoria, verificando domanda, evidenza e risposta
 attesa dei casi comuni. Wilcoxon signed-rank e McNemar (con correzione di Holm
 sulle dimensioni) sono gli strumenti previsti
-\cite{scipyWilcoxon,mcnemar1947}. La soglia delle 20 coppie non elimina la
-dipendenza fra famiglie; Wilcoxon richiede inoltre attenzione a pareggi e zeri,
-frequenti nei voti 1--5. Prima di attribuire un cambiamento a una modifica è
-utile un confronto A/A della stessa versione.
+\cite{scipyWilcoxon,mcnemar1947,statsmodelsHolm}. La soglia delle 20 coppie non
+elimina la dipendenza fra famiglie di scenari. Wilcoxon richiede inoltre
+ipotesi sulla distribuzione delle differenze, inclusa la simmetria sotto
+l'ipotesi nulla, e attenzione a pareggi e zeri, frequenti nei voti 1--5.
+Il suo uso sui voti presuppone che le differenze numeriche siano
+interpretabili: la sola natura ordinale non garantisce questa proprietà.
+Per McNemar vanno considerate le coppie discordanti dell'esito binario.
+La famiglia di ipotesi alla quale applicare Holm deve essere dichiarata e
+non coincide con le famiglie di parafrasi del dataset. Prima di attribuire
+un cambiamento a una modifica è utile un confronto A/A della stessa versione.
 
 \section{Risultati riportati e provenienza}
 \label{sec:risultati-judge}
