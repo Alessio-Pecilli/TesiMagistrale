@@ -23,19 +23,31 @@ eventi né come origine dei valori mostrati nei grafici.
 
 \section{Posizionamento rispetto ai lavori correlati}
 
-Il progetto si colloca nella linea degli agenti basati su LLM che decidono
-quando invocare strumenti esterni
-\cite{yaoReAct,schickToolformer,openaiFunctionCalling}. Rispetto a un assistente
-generico con function calling, il perimetro è ristretto all'osservazione della
-Terra e alle fonti di allerta: catalogo metadati Copernicus, STAC live, GDACS e
-CEMS. Sistemi commerciali o sperimentali di ``Earth Copilot'' o chat su cataloghi
-EO condividono l'idea di interrogare metadati in linguaggio naturale; qui si
-insiste sulla separazione fra Discovery (risorsa catalogata) e acquisizioni
-STAC live, sul ranking deterministico e su un protocollo di valutazione con
-controlli critici. MCP \cite{mcpSpec} è usato come contratto di integrazione per
-GDACS e CEMS, non come soluzione alla semantica geospaziale. Il contributo non è
-un nuovo algoritmo di retrieval, bensì l'organizzazione di questi elementi in un
-workspace verificabile.
+Il progetto si colloca nella linea degli agenti basati su LLM che usano
+strumenti esterni. ReAct studia l'alternanza tra ragionamento e azione;
+Toolformer affronta l'apprendimento dell'uso delle API
+\cite{yaoReAct,schickToolformer}. Il function calling documenta invece un
+meccanismo applicativo per collegare il modello a funzioni eseguibili
+\cite{openaiFunctionCalling}: non è di per sé un'architettura multiagente.
+
+Nel dominio dell'osservazione della Terra, Earth Copilot nasce dalla
+collaborazione NASA--Microsoft per rendere interrogabili dati geospaziali
+attraverso domande in linguaggio naturale \cite{earthCopilot2024}.
+La documentazione pubblica descrive finalità e integrazione con l'accesso ai
+dati NASA; non fornisce un confronto controllato con questo prototipo.
+Il CDSE STAC Browser offre invece navigazione e filtri sui metadati del
+catalogo, con accesso alle proprietà e agli asset dei prodotti
+\cite{cdseStac}. È un termine di confronto per la consultazione dei cataloghi,
+mentre il workspace qui proposto aggiunge interpretazione linguistica,
+coordinamento di fonti eterogenee e continuità conversazionale.
+
+Il posizionamento del lavoro riguarda l'integrazione di questi bisogni:
+Discovery di risorse catalogate, ricerca STAC live e consultazione di eventi
+e attivazioni. MCP \cite{mcpSpec} delimita l'accesso a GDACS e CEMS;
+il catalogo a grafo conserva le gerarchie delle risorse e il ranking applica
+regole esplicite. Il contributo è un'architettura applicativa e il relativo
+protocollo di verifica. Non viene rivendicato un nuovo algoritmo di retrieval
+né un vantaggio misurato rispetto ai sistemi citati.
 
 \section{Il problema affrontato}
 
@@ -154,9 +166,9 @@ server MCP, Redis, Keycloak e harvester NebulaGraph tramite Docker Compose. La
 domanda viene prima confrontata con il dominio geografico e ambientale, poi
 trasformata in una rappresentazione strutturata e assegnata alle sorgenti
 pertinenti. Un grafo LangGraph stabilisce i percorsi consentiti e permette ai
-rami indipendenti di procedere in parallelo. Rispetto a un agente unico con
-accesso a tutti gli strumenti, questa struttura rende ispezionabili le
-condizioni applicate prima di raccogliere i risultati.
+rami indipendenti di procedere in parallelo. La struttura rende ispezionabili le condizioni applicate prima di raccogliere
+i risultati; questa proprietà progettuale non costituisce una misura di
+superiorità rispetto a un agente unico.
 
 Ogni integrazione traduce la risposta remota in un dataset con campi stabili. I
 client possono così essere provati con input controllati e gli errori restano
@@ -182,6 +194,14 @@ osservabilità e valutazione.
 
 \section{Perimetro e limiti}
 
+La descrizione dell'implementazione si riferisce ai materiali tecnici del
+progetto e alla guida allegata \cite{guidaProgetto2026}. Una descrizione di
+comportamento non equivale a una riesecuzione: i controlli software storici,
+i conteggi riportati e le nuove verifiche editoriali hanno evidenze diverse.
+Gli aspetti che richiedono sorgenti o artefatti originali sono elencati nel
+file \nolinkurl{VERIFICHE_CODICE.md}, distribuito con i sorgenti della tesi.
+
+
 Il prototipo non è uno strumento operativo di protezione civile e non sostituisce
 le comunicazioni delle autorità competenti. GDACS offre valutazioni rapide che
 possono cambiare quando vengono raccolte nuove informazioni. Le attivazioni CEMS
@@ -191,8 +211,8 @@ esse siano sufficienti a stabilire l'entità di un danno.
 
 La dashboard non esegue un'analisi scientifica delle immagini satellitari. La
 heatmap rappresenta la densità dei centri delle bounding box degli item
-recuperati, mentre i
-footprint mostrano le aree dichiarate nei metadati. Non vengono calcolati indici
+recuperati, mentre i rettangoli visualizzati mostrano le estensioni delle bounding box,
+non le geometrie precise degli item. Non vengono calcolati indici
 spettrali, classificazioni del suolo o stime automatiche degli effetti di un
 evento. Tale distinzione limita le conclusioni che possono essere tratte dalle
 visualizzazioni.

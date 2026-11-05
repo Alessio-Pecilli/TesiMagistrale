@@ -20,14 +20,6 @@ generate dall'interfaccia (titolo della chat, suggerimenti). Questi task non
 devono essere scambiati per domande geografiche e vengono gestiti
 separatamente.
 
-\begin{figure}[htbp]
-\centering
-\includegraphics[width=0.92\textwidth]{Images/screenshots/ui-workspace-prompt.png}
-\caption{Formulazione di una richiesta operativa nella dashboard nativa, con
-suggerimenti contestuali e avvio di una nuova analisi.}
-\label{fig:ui-workspace-prompt}
-\end{figure}
-
 Il nodo \texttt{ingress} estrae l'ultimo messaggio umano e ripulisce eventuali
 marcatori dell'interfaccia. Il Gateway decide quindi se procedere. Da questo
 punto sono possibili tre casi:
@@ -93,8 +85,8 @@ per identificativo e ridotti ai metadati utili.
 \subsection{Sincronizzazione e risposta}
 
 LangGraph attende la convergenza dei worker. Il Chart Agent riceve soltanto
-dataset normalizzati e aggregazioni; il renderer della mappa riceve footprint e
-centroidi. Nel percorso operativo, le acquisizioni STAC alimentano inoltre
+dataset normalizzati e aggregazioni; il renderer della mappa riceve bounding
+box e relativi centri. Nel percorso operativo, le acquisizioni STAC alimentano inoltre
 un artefatto dashboard incorporato nel workspace. Il Conversation Agent compone
 infine:
 
@@ -129,7 +121,8 @@ infine:
     \draw[msg] (6.4,-2.6) -- node[above]{query strutturate} (9.6,-2.6);
     \draw[return] (9.6,-3.5) -- node[above]{dataset normalizzati} (6.4,-3.5);
     \draw[msg] (6.4,-4.4) -- node[above]{artefatti} (12.8,-4.4);
-    \draw[return] (12.8,-5.2) -- node[above]{artefatto dashboard} (6.4,-5.2);
+    \node[align=center,font=\scriptsize] at (12.8,-5.2)
+        {rendering\\nel browser};
     \draw[return] (6.4,-6.0) -- node[above]{risposta finale} (3.2,-6.0);
     \draw[return] (3.2,-6.6) -- node[above]{stream SSE} (0,-6.6);
 \end{tikzpicture}}
@@ -329,8 +322,8 @@ ripetere la domanda iniziale.
 \subsection{Heatmap Copernicus}
 
 Leaflet rappresenta una heatmap della densità dei centri delle bounding box
-degli item recuperati e collega il risultato a una vista con footprint
-rettangolari e metadati STAC. Non misura copertura areale né intensità del
+degli item recuperati e collega il risultato a una vista con i rettangoli
+delle bounding box e i metadati STAC. Non misura copertura areale né intensità del
 fenomeno osservato. Se un cross-filter è attivo, la mappa usa lo stesso
 sottoinsieme di record degli altri componenti.
 
@@ -384,8 +377,8 @@ risposta non valida e persistenza. A ciascuno sono associati:
 \subsection{Timeout e retry}
 
 I retry sono applicati soltanto agli errori presumibilmente transitori, come
-timeout, problemi di rete, HTTP 429 e HTTP 5xx. Gli errori HTTP 4xx non vengono
-ripetuti automaticamente. Anche il modello remoto dispone di timeout,
+timeout, problemi di rete, HTTP 429 e HTTP 5xx. Gli altri errori HTTP 4xx non vengono ripetuti automaticamente; HTTP 429
+costituisce l\'eccezione transitoria già indicata. Anche il modello remoto dispone di timeout,
 backoff e limite di concorrenza, così che i rami paralleli non saturino il
 runner Ollama.
 
@@ -483,7 +476,8 @@ Osservabilità & Metriche & Overlay & No & Grafana \\
 \end{tabularx}
 \caption{Funzionalità descritte e tipo di evidenza disponibile. ``Benchmark''
 si riferisce al protocollo~6.0 del Capitolo~\ref{cap:7}; ``Browser'' indica
-verifica manuale o screenshot, non misurata dal runner.}
+il tipo di schermata illustrativa disponibile e non certifica un collaudo
+end-to-end dell'interfaccia.}
 \label{tab:funzionalita-evidenza}
 \end{table}
 

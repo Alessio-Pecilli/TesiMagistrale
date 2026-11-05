@@ -26,11 +26,13 @@ comprende i messaggi e i risultati restituiti dalle fonti; le azioni sono il
 routing verso un ramo del workflow, l'invocazione di un tool o la produzione
 della risposta.
 
-Un classificatore che riceve un'immagine e restituisce una classe rientra nei
-sistemi di IA, ma non costituisce necessariamente un agente: non interagisce con
-l'ambiente nel tempo e non conserva un obiettivo persistente. Nell'agente queste
-due proprietà sono centrali, perché ogni azione modifica le informazioni sulle
-quali verrà presa la decisione successiva.
+Un classificatore può essere un componente della funzione di un agente, ma
+la sola classificazione non descrive il ciclo applicativo di questo progetto.
+Nel seguito il termine agente basato su LLM indica un componente che usa il
+modello per scegliere un'azione nel workflow; repository, filtri e ranking
+deterministici sono invece nodi di elaborazione. Questa convenzione non
+richiede che tutti gli agenti, in senso generale, conservino uno stato o
+abbiano un obiettivo persistente.
 
 \section{Apprendimento statistico e reti profonde}
 
@@ -115,10 +117,11 @@ Un modello linguistico assegna probabilità a sequenze di token. Se una frase vi
 \[
     P(x_1, \ldots, x_n) = \prod_{t=1}^{n} P(x_t \mid x_1, \ldots, x_{t-1})
 \]
-L'addestramento consiste quindi nella predizione del token successivo dato il
-contesto precedente. Pur essendo formulato come un compito locale, questo
-obiettivo richiede di rappresentare regolarità grammaticali e semantiche, oltre
-alle relazioni fattuali presenti nei dati di addestramento.
+Nel pre-addestramento autoregressivo, la funzione obiettivo favorisce la
+predizione del token successivo dato il contesto precedente. L'apprendimento
+può così catturare regolarità grammaticali, semantiche e fattuali dei dati,
+senza garantire che ogni relazione appresa sia vera o che ogni fatto venga
+conservato correttamente. Altri obiettivi intervengono nei successivi adattamenti.
 
 Il tokenizer converte il testo in unità discrete, che possono coincidere con una
 parola, una sua parte o un segno di punteggiatura. A ciascuna unità è associato
@@ -139,6 +142,7 @@ Il Transformer usa invece il meccanismo di self-attention. Ogni token costruisce
     \mathrm{Attention}(Q,K,V) = \mathrm{softmax}\left(\frac{QK^T}{\sqrt{d_k}}\right)V
 \]
 Il calcolo mette in relazione direttamente posizioni diverse della sequenza,
+con una maschera causale che, nel caso autoregressivo, esclude i token futuri,
 senza comprimere tutto il prefisso in un singolo stato ricorrente. Le diverse
 teste di attenzione apprendono relazioni differenti in parallelo. Questa
 struttura facilita la parallelizzazione dell'addestramento e si è dimostrata
@@ -148,7 +152,8 @@ adatta a scalare con dati e modelli di grandi dimensioni.
 
 Con LLM si indica un modello linguistico neurale addestrato su collezioni testuali
 estese, in genere basato su Transformer. Il termine ``grande'' può riferirsi al
-numero di parametri, ai dati e al calcolo impiegati o alla lunghezza del contesto.
+numero di parametri e alla scala dei dati e del calcolo impiegati; la lunghezza
+del contesto è una proprietà distinta.
 
 I parametri sono i valori numerici appresi, organizzati principalmente in matrici
 di pesi e vettori di bias. GPT-3, per esempio, è stato presentato come un modello

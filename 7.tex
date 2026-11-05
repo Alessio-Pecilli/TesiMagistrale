@@ -4,8 +4,10 @@ un luogo o un periodo sbagliato. Il progetto adotta quindi un benchmark
 ancorato a evidenze, controlli deterministici e un LLM-as-a-Judge. Questo
 capitolo descrive il \textbf{protocollo~6.0} implementato in
 \path{backend/app/evals/} (versione dichiarata in
-\path{dataset/schema.py}) e riporta i risultati delle run complete salvate
-sul dataset corrente. Per confronto storico, in chiusura si richiamano anche
+\path{dataset/schema.py}) e distingue i conteggi riportati per il dataset corrente dai risultati
+storici riscontrabili nella guida allegata. Gli artefatti originali delle run
+correnti non sono inclusi nei materiali di questa stesura: i conteggi possono
+essere controllati aritmeticamente, ma non ricostruiti caso per caso. Per confronto storico, in chiusura si richiamano anche
 le run parziali con protocollo~4.0 documentate nella guida del 15 ottobre 2026
 \cite{guidaProgetto2026}; i due insiemi non sono direttamente somabili perché
 differiscono per protocollo, hash del dataset e regole di esito.
@@ -13,8 +15,9 @@ differiscono per protocollo, hash del dataset e regole di esito.
 \begin{figure}[htbp]
 \centering
 \includegraphics[width=0.88\textwidth]{Images/screenshots/ui-evals-panel.png}
-\caption{Pannello di valutazione nel workspace: esecuzione del benchmark del
-\texttt{WorkflowAgent} (dataset, Judge, controlli e sintesi per categoria).}
+\caption{Schermata illustrativa del pannello di valutazione: dataset, Judge,
+controlli e sintesi per categoria. La run mostrata nell'interfaccia non è una
+prova dei conteggi della Tabella~\ref{tab:risultati-6}.}
 \label{fig:ui-evals-panel}
 \end{figure}
 
@@ -36,7 +39,8 @@ al singolo turno.
 Opzionalmente, il protocollo~6.0 può registrare una validazione della
 \emph{comprensione} prima del router, tramite il campo
 \texttt{validation\_mode}
-(\texttt{none}/\texttt{self\_report}/\texttt{verifier}/\texttt{stage\_checks}).
+con le modalità \texttt{none}, \texttt{self\_report},
+\texttt{verifier} o \texttt{stage\_checks}.
 L'esito pass/fail del caso resta quello della run ordinaria; le modalità di
 comprensione sono uno strato aggiuntivo e non sostituiscono i voti del Judge.
 
@@ -275,20 +279,21 @@ dipendenza fra famiglie; Wilcoxon richiede inoltre attenzione a pareggi e zeri,
 frequenti nei voti 1--5. Prima di attribuire un cambiamento a una modifica è
 utile un confronto A/A della stessa versione.
 
-\section{Risultati documentati}
+\section{Risultati riportati e provenienza}
 \label{sec:risultati-judge}
 
-\subsection{Run complete con protocollo~6.0}
+\subsection{Riepilogo riportato per il protocollo~6.0}
 
-Sul dataset corrente da 105 casi esistono più run complete con protocollo~6.0,
-Judge \texttt{gemma3:27b} e temperatura zero. La Tabella~\ref{tab:risultati-6}
-riporta la run \texttt{eval-run-ca004ba5} (\texttt{validation\_mode}
-assente/\texttt{none}, seed 40), scelta come riferimento perché è completa, usa
-il protocollo corrente senza strato aggiuntivo di comprensione e coincide con
-le metriche di recupero già citate nella guida tecnica. Non è la media di più
-run né una selezione sul tasso più alto: altre run 6.0 con
-\texttt{self\_report}/\texttt{verifier}/\texttt{stage\_checks} restano nello
-stesso ordine di grandezza e non vanno sommate come osservazioni indipendenti.
+Per il dataset descritto da 105 casi, il riepilogo utilizzato nella stesura
+attribuisce alla run \texttt{eval-run-ca004ba5} i conteggi della
+Tabella~\ref{tab:risultati-6}, con protocollo~6.0, Judge \texttt{gemma3:27b},
+temperatura zero e seed 40. Sono risultati riportati, non una nuova esecuzione.
+Il file JSON della run, il dataset con il relativo hash e la revisione del
+codice non sono allegati; la guida del 15 ottobre documenta invece run del
+protocollo~4.0. Non è quindi possibile usare quella guida come prova dei
+conteggi correnti o della selezione di questa run rispetto ad altre.
+La tabella conserva il riepilogo distinguendo il controllo dei calcoli dalla
+verifica sperimentale, che richiede gli artefatti originali.
 
 \begin{table}[htbp]
 \centering
@@ -306,58 +311,34 @@ Grafo & 31/49 (63,3\%) & 31/51 (60,8\%) & 49,3--75,3\% & 43,8--81,8\% \\
 Acquisizioni & 54/54 (100\%) & 54/54 (100\%) & 93,4--100\% & 100--100\% \\
 \bottomrule
 \end{tabularx}
-\caption{Run \texttt{eval-run-ca004ba5}. Il tasso primario esclude i due
+\caption{Conteggi riportati per la run \texttt{eval-run-ca004ba5}, da
+riscontrare sugli artefatti originali. Il tasso primario esclude i due
 \texttt{review} del grafo; il rigoroso li include nel denominatore. Wilson sui
 casi valutabili non incorpora la dipendenza fra famiglie; il bootstrap al
 100\% sulle acquisizioni è degenerato (nessun fallimento da ricampionare).}
 \label{tab:risultati-6}
 \end{table}
 
-\begin{table}[htbp]
-\centering
-\small
-\begin{tabularx}{\textwidth}{
-    >{\bfseries\raggedright\arraybackslash}p{0.28\textwidth}
-    >{\centering\arraybackslash}p{0.12\textwidth}
-    >{\raggedright\arraybackslash}X}
-\toprule
-Modalità di fallimento (grafo) & $n$ & Lettura operativa \\
-\midrule
-Target assente dalla lista restituita & 8 & Recupero/ranking su candidati
-diversi dal riferimento. \\
-\addlinespace[1pt]
-Percorso errato e target non recuperato & 4 & Instradamento operativo al posto
-del solo grafo. \\
-\addlinespace[1pt]
-Target citato ma voto sotto soglia & 4 & Controlli critici ok; Judge su
-completezza/rilevanza. \\
-\addlinespace[1pt]
-Target non recuperato (lista vuota) & 2 & Intent/query senza candidati. \\
-\addlinespace[1pt]
-Incoerenza Judge/\texttt{review} & 2 & Citazione corretta ma voti incompatibili
-con i fatti. \\
-\bottomrule
-\end{tabularx}
-\caption{Tassonomia dei 18 \texttt{fail} e 2 \texttt{review} sul grafo nella
-run \texttt{ca004ba5}, derivata da hit/citazione/percorso nei controlli. Non
-compaiono casi con target recuperato e non citato: quando il target è in lista
-e citato, i fallimenti residui sono di qualità o di coerenza del Judge.}
-\label{tab:fallimenti-grafo}
-\end{table}
+La differenza tra i due tassi del grafo dipende dai due casi indicati come
+\texttt{review}: il primario esclude questi casi, il rigoroso li include.
+L'intervallo Wilson è ricalcolabile dai conteggi; il bootstrap riportato non
+è ricostruibile senza famiglie, esiti individuali e configurazione.
 
-Le metriche di recupero indipendenti dai voti, sulla stessa run, sono: hit
-71,4\%, hit@1 18,4\%, citazione 71,4\%, MRR 0,295 (49 casi grafo valutabili). Il
-gap fra hit e hit@1 indica che il riferimento spesso è presente ma non in cima
-al ranking. Nelle acquisizioni: completezza dei \texttt{core\_ids} 94,1\% e
-richiamo medio sul nucleo 97,4\% (51 casi con traccia di recupero).
+Per analizzare i fallimenti è necessario distinguere almeno quattro cause:
+instradamento errato, mancato recupero del riferimento, esclusione nel ranking
+e risposta finale incompleta o non fedele. Una risorsa alternativa corretta
+richiede inoltre una valutazione distinta dall'assenza del target previsto.
+La distribuzione di queste cause non viene quantificata in assenza della
+traccia originale: la sola presenza di 18 fail non ne identifica l'origine.
 
-Il 100\% di pass sulle acquisizioni non implica copertura geografica perfetta.
-Tre casi passano con avviso maggiore sulla quota di prodotti sul luogo: ad
-esempio \texttt{STAC-017} (Etna, Sentinel-2 L2A) recupera 3 dei 6
-\texttt{core\_ids} (richiamo 0,5) ma tutti i prodotti restituiti sono sul
-luogo (\texttt{on\_place\_share}=1). Il pass misura quindi il rispetto dei
-criteri bloccanti del protocollo, non l'esaustività del catalogo sul centro
-richiesto.
+Hit, hit@1, MRR, citazione e recupero dei \texttt{core\_ids} devono essere
+ricostruiti sulla stessa popolazione di casi, dichiarando esclusioni e
+riferimenti. La precisione geografica e il richiamo hanno significati diversi:
+se tre prodotti recuperati sono tutti pertinenti e il riferimento ne contiene
+sei, la quota pertinente può essere 1 mentre il richiamo è 0,5. Questo è un
+esempio illustrativo, non l'esito verificato di un caso del benchmark.
+Un pass del protocollo non dimostra quindi esaustività, e l'assenza di
+fallimenti bloccanti non elimina eventuali avvisi di qualità.
 
 \subsection{Confronto storico con protocollo~4.0}
 

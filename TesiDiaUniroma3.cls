@@ -42,7 +42,7 @@
 % margini (la dimensione del blocco di testo viene regolata di conseguenza)
 \setlrmarginsandblock{3.5cm}{3cm}{*}
 % profondità dell'indice (settato per stampare fino alle sottosezioni)
-\setcounter{tocdepth}{2}
+\setcounter{tocdepth}{1}
 % numera parti, capitoli, sezioni, sottosezioni e sotto-sottosezioni
 \maxsecnumdepth{subsubsection}
 \setsecnumdepth{subsubsection}
@@ -55,7 +55,7 @@
 \fancyhf{}
 \addtolength{\headheight}{14pt}
 \fancyhead[R]{\textbf{\thepage}}
-\fancyhead[L]{\textbf{\leftmark}}
+\fancyhead[L]{\parbox[b]{0.90\textwidth}{\small\textbf{\leftmark}}}
 
 \usepackage{adjustbox}
 

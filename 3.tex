@@ -7,122 +7,6 @@ per esempio, non misura l'intensità di un disastro. Il capitolo chiarisce quind
 contenuto, modalità di accesso e limiti di ciascuna fonte prima di esaminare
 l'architettura che le combina.
 
-\section{Componenti applicativi}
-
-L'accesso alle fonti geospaziali è mediato da un workspace conversazionale e da
-un workflow persistente. I componenti vengono qui raggruppati per funzione,
-mentre le dipendenze e i nodi del grafo sono descritti nel capitolo successivo.
-
-\subsection{Interfaccia e API}
-
-L'interfaccia primaria è \emph{Copernicus Data Workspace}, servita dal backend
-su \path{/dashboard}. È uno spazio di lavoro a schermo intero, con home in
-italiano e selettore IT/EN, in cui l'utente:
-
-\begin{itemize}
-    \item formula la domanda in linguaggio naturale (Discovery, analisi
-    operativa o percorso combinato);
-    \item avvia una nuova indagine oppure riprende una sessione recente che
-    conserva filtri, artefatti e contesto;
-    \item consulta testo, tabelle e dashboard generate dal workflow.
-\end{itemize}
-
-L'autenticazione è OIDC tramite Keycloak (realm \texttt{pecilli}). Il client
-pubblico usato dal browser è \texttt{dashboard-client}. I ruoli distinguono
-almeno un profilo amministratore, con accesso anche agli strumenti di
-valutazione, e un profilo utente standard.
-
-Open WebUI resta disponibile soltanto come client legacy opzionale (profilo
-Compose \texttt{legacy-ui}): una Pipe può inoltrare la chat al backend nel
-formato delle completion OpenAI, ma non è richiesta dal percorso standard
-\cite{openWebuiDocs}. Il viewer cartografico STAC (\path{/copernicus}) resta
-disponibile come vista dedicata, distinta dalla dashboard analitica.
-
-FastAPI espone l'endpoint di chat, le API degli artefatti (lettura, mutazioni,
-revisioni, chat contestuale) e lo streaming SSE. I modelli Pydantic validano
-richieste, decisioni degli agenti e risultati normalizzati prima che passino al
-nodo successivo \cite{fastapiDocs}. Il formato HTTP resta così separato dalla
-rappresentazione interna dello stato.
-
-\begin{figure}[htbp]
-\centering
-\includegraphics[width=0.92\textwidth]{Images/screenshots/ui-workspace-home.png}
-\caption{Home della dashboard nativa (\emph{Copernicus Data Workspace}):
-ingresso della domanda, suggerimenti, ripresa delle indagini e stato del
-servizio autenticato con Keycloak.}
-\label{fig:ui-workspace-home}
-\end{figure}
-
-\subsection{Orchestrazione e memoria}
-
-LangChain gestisce messaggi, invocazioni e output strutturati del modello
-\cite{langchainDocs}; LangGraph dispone le operazioni in un grafo con rami
-condizionali e punti di convergenza \cite{langgraphDocs}. La scelta linguistica
-determina il piano, ma è il grafo a stabilire quali nodi possano essere eseguiti
-e quando i risultati siano pronti per la risposta.
-
-Redis conserva il checkpoint associato alla conversazione: messaggi utili,
-risultati raccolti, filtri e riferimenti agli artefatti. Un follow-up come
-``raggruppali per giorno'' può quindi operare sul dataset precedente senza
-interrogare di nuovo le sorgenti \cite{redisDocs}. Nel percorso ordinario la
-chiave deriva dal \texttt{thread\_id} della sessione workspace (e, nel client
-legacy, dagli identificativi utente/chat di Open WebUI). Il fallback basato
-sul primo messaggio, previsto per client privi di metadati, non offre un
-isolamento adeguato a un'installazione multiutente.
-
-\subsection{Modello e distribuzione}
-
-Il modello servito da Ollama è remoto rispetto al backend (nel prototipo
-documentato, tipicamente \texttt{qwen3:8b} per il workflow e un modello
-distinto per il Judge). Riceve il contesto preparato dai nodi e interviene
-nell'interpretazione, nel piano e nella risposta; non accede direttamente a
-GDACS, Copernicus o Redis e non calcola i valori dei grafici. Le chiamate sono
-soggette a timeout, retry selettivi e limiti di concorrenza \cite{ollamaDocs}.
-
-Docker Compose, nella root del repository umbrella, coordina backend, asset
-frontend, Keycloak, Redis, servizi MCP e infrastruttura NebulaGraph sulla rete
-\texttt{pecillispace}. I profili \texttt{legacy-ui}, \texttt{harvest} e
-\texttt{tools}, insieme all'overlay di osservabilità, aggiungono le rispettive
-funzioni \cite{dockerComposeDocs,guidaProgetto2026}. La
-Tabella~\ref{tab:tecnologie-abilitanti} riporta la responsabilità assegnata a
-ciascun elemento dello stack.
-
-\begin{table}[htbp]
-\centering
-\small
-\begin{tabularx}{\textwidth}{
-    >{\bfseries\raggedright\arraybackslash}p{0.27\textwidth}
-    >{\raggedright\arraybackslash}X}
-\toprule
-Tecnologia & \bfseries Ruolo nel sistema \\
-\midrule
-Copernicus Data Workspace & Home, chat, artefatti Discovery/operativi e ripresa sessioni. \\
-Keycloak & Autenticazione OIDC, realm \texttt{pecilli} e ruoli applicativi. \\
-LangChain & Comunicazione strutturata tra agenti e modello linguistico. \\
-LangGraph & Coordinamento dei passaggi, delle fonti e dei follow-up. \\
-Redis Stack & Checkpoint per conversazione e riuso dei risultati. \\
-NebulaGraph & Catalogo condiviso di metadati Marine, STAC e Drought. \\
-Ollama & Inferenza del modello usato dal workflow (e, se configurato, dal Judge). \\
-FastAPI e Pydantic & API del sistema e controllo della forma dei dati scambiati. \\
-Docker Compose & Avvio coordinato dei servizi sulla rete \texttt{pecillispace}. \\
-Prometheus e Grafana & Raccolta delle metriche e diagnosi aggregata LLMOps. \\
-OpenTelemetry e Phoenix & Tracciamento delle singole esecuzioni. \\
-Open WebUI (opzionale) & Client legacy di chat; profilo Compose \texttt{legacy-ui}. \\
-\bottomrule
-\end{tabularx}
-\caption{Tecnologie del nucleo applicativo, del catalogo e dell'osservabilità.}
-\label{tab:tecnologie-abilitanti}
-\end{table}
-
-\begin{figure}[htbp]
-\centering
-\includegraphics[width=0.88\textwidth]{Images/screenshots/diagramma_flusso.png}
-\caption{Flusso di elaborazione sintetico: dalla domanda in linguaggio naturale
-alla risposta con dashboard, mappa e fonti. Il gateway distingue Discovery e
-percorso operativo prima della selezione delle sorgenti.}
-\label{fig:diagramma-flusso}
-\end{figure}
-
 \section{GDACS}
 
 \subsection{Scopo e contesto operativo}
@@ -237,21 +121,23 @@ standardizzato \cite{cdseStac}.
 Il ramo STAC del progetto non esegue una classificazione scientifica delle
 immagini e non produce una mappa dei danni. Recupera invece i metadati delle
 acquisizioni che intersecano luogo e periodo richiesti. STAC distingue
-\texttt{bbox} e \texttt{geometry}: da ogni Item si usa la bounding box del
-prodotto (rettangolo), se ne calcola il centro e si costruisce:
+\texttt{bbox} e \texttt{geometry}: nel percorso visuale descritto si usa la bounding box del prodotto
+(rettangolo), se ne calcola il centro e si costruisce:
 
 \begin{itemize}
     \item una heatmap della densità dei centri delle bounding box dei
     risultati recuperati (non della copertura areale né dell'intensità del
     fenomeno);
-    \item i footprint rettangolari della bounding box, selezionabili;
+    \item i rettangoli delle bounding box, selezionabili;
     \item un pannello con identificativo, collezione, data, piattaforma,
     copertura nuvolosa, asset e collegamenti disponibili.
 \end{itemize}
 
 I KPI di conteggio si riferiscono agli \emph{item} STAC restituiti dalla
-ricerca (metadati di prodotto), non a tile, scene ottiche distinte o
-osservazioni scientifiche derivate. La visualizzazione non misura la
+ricerca (metadati di prodotto). Un item può rappresentare un prodotto relativo
+a un tile: il conteggio non deduplica implicitamente livelli di elaborazione
+o prodotti della stessa acquisizione fisica e non misura osservazioni
+scientifiche derivate. La visualizzazione non misura la
 severità del disastro né la frazione di territorio effettivamente coperta
 dalle geometrie precise degli Item.
 
@@ -357,7 +243,7 @@ Attivazione, area di interesse e prodotto \\
 \addlinespace
 Uso &
 Monitoraggio di eventi &
-Heatmap e footprint delle acquisizioni &
+Heatmap e bounding box dei prodotti &
 Prodotti Rapid Mapping e Risk/Recovery \\
 \addlinespace
 Integrazione &

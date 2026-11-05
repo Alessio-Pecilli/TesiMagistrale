@@ -1,6 +1,7 @@
 finalname = main
 
 included_latex_sources = \
+	sommario.tex \
 	ringraziamenti.tex \
 	introduzione.tex \
 	1.tex \

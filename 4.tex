@@ -28,6 +28,127 @@ I requisiti che guidano l'architettura sono:
     controlli oggettivi e rubriche esplicite.
 \end{itemize}
 
+\section{Componenti applicativi}
+
+L'accesso alle fonti geospaziali è mediato da un workspace conversazionale e da
+un workflow persistente. I componenti vengono qui raggruppati per funzione,
+mentre le dipendenze e i nodi del grafo sono descritti nelle sezioni seguenti.
+
+\subsection{Interfaccia e API}
+
+L'interfaccia primaria è \emph{Copernicus Data Workspace}, servita dal backend
+su \path{/dashboard}. È uno spazio di lavoro a schermo intero, con home in
+italiano e selettore IT/EN, in cui l'utente:
+
+\begin{itemize}
+    \item formula la domanda in linguaggio naturale (Discovery, analisi
+    operativa o percorso combinato);
+    \item avvia una nuova indagine oppure riprende una sessione recente che
+    conserva filtri, artefatti e contesto;
+    \item consulta testo, tabelle e dashboard generate dal workflow.
+\end{itemize}
+
+L'autenticazione è OIDC tramite Keycloak (realm \texttt{pecilli}). Il client
+pubblico usato dal browser è \texttt{dashboard-client}. I ruoli distinguono
+almeno un profilo amministratore, con accesso anche agli strumenti di
+valutazione, e un profilo utente standard.
+
+Open WebUI resta disponibile soltanto come client legacy opzionale (profilo
+Compose \texttt{legacy-ui}): una Pipe può inoltrare la chat al backend nel
+formato delle completion OpenAI, ma non è richiesta dal percorso standard
+\cite{openWebuiDocs}. Il viewer cartografico STAC (\path{/copernicus}) resta
+disponibile come vista dedicata, distinta dalla dashboard analitica.
+
+FastAPI espone l'endpoint di chat, le API degli artefatti (lettura, mutazioni,
+revisioni, chat contestuale) e lo streaming SSE. I modelli Pydantic validano
+richieste, decisioni degli agenti e risultati normalizzati prima che passino al
+nodo successivo \cite{fastapiDocs}. Il formato HTTP resta così separato dalla
+rappresentazione interna dello stato.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.92\textwidth]{Images/screenshots/ui-workspace-home.png}
+\caption{Home della dashboard nativa (\emph{Copernicus Data Workspace}):
+ingresso della domanda, suggerimenti, ripresa delle indagini e stato del
+servizio autenticato con Keycloak.}
+\label{fig:ui-workspace-home}
+\end{figure}
+
+\subsection{Orchestrazione e memoria}
+
+LangChain gestisce messaggi, invocazioni e output strutturati del modello
+\cite{langchainDocs}; LangGraph dispone le operazioni in un grafo con rami
+condizionali e punti di convergenza \cite{langgraphDocs}. La scelta linguistica
+determina il piano, ma è il grafo a stabilire quali nodi possano essere eseguiti
+e quando i risultati siano pronti per la risposta.
+
+Redis conserva il checkpoint associato alla conversazione: messaggi utili,
+risultati raccolti, filtri e riferimenti agli artefatti. Un follow-up come
+``raggruppali per giorno'' può quindi operare sul dataset precedente senza
+interrogare di nuovo le sorgenti. La persistenza per thread deriva dal
+checkpointer LangGraph e dalla sua integrazione Redis
+\cite{langgraphPersistence,redisCheckpointer}; il riuso selettivo dei risultati
+è una scelta del workflow applicativo \cite{guidaProgetto2026}. Nel percorso ordinario la
+chiave deriva dal \texttt{thread\_id} della sessione workspace (e, nel client
+legacy, dagli identificativi utente/chat di Open WebUI). Il fallback basato
+sul primo messaggio, previsto per client privi di metadati, non offre un
+isolamento adeguato a un'installazione multiutente.
+
+\subsection{Modello e distribuzione}
+
+Il modello servito da Ollama è remoto rispetto al backend (nel prototipo
+documentato, tipicamente \texttt{qwen3:8b} per il workflow e un modello
+distinto per il Judge). Riceve il contesto preparato dai nodi e interviene
+nell'interpretazione, nel piano e nella risposta; non accede direttamente a
+GDACS, Copernicus o Redis e non calcola i valori dei grafici. Le chiamate sono
+gestite dal client applicativo mediante timeout, retry selettivi e limiti di
+concorrenza, secondo la configurazione del progetto \cite{guidaProgetto2026}.
+Ollama fornisce il servizio di inferenza \cite{ollamaDocs}.
+
+Docker Compose, nella root del repository umbrella, coordina backend, asset
+frontend, Keycloak, Redis, servizi MCP e infrastruttura NebulaGraph sulla rete
+\texttt{pecillispace}. I profili \texttt{legacy-ui}, \texttt{harvest} e
+\texttt{tools}, insieme all'overlay di osservabilità, aggiungono le rispettive
+funzioni \cite{dockerComposeDocs,guidaProgetto2026}. La
+Tabella~\ref{tab:tecnologie-abilitanti} riporta la responsabilità assegnata a
+ciascun elemento dello stack.
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabularx}{\textwidth}{
+    >{\bfseries\raggedright\arraybackslash}p{0.27\textwidth}
+    >{\raggedright\arraybackslash}X}
+\toprule
+Tecnologia & \bfseries Ruolo nel sistema \\
+\midrule
+Copernicus Data Workspace & Home, chat, artefatti Discovery/operativi e ripresa sessioni. \\
+Keycloak & Autenticazione OIDC, realm \texttt{pecilli} e ruoli applicativi. \\
+LangChain & Comunicazione strutturata tra agenti e modello linguistico. \\
+LangGraph & Coordinamento dei passaggi, delle fonti e dei follow-up. \\
+Redis Stack & Checkpoint per conversazione e riuso dei risultati. \\
+NebulaGraph & Catalogo condiviso di metadati Marine, STAC e Drought. \\
+Ollama & Inferenza del modello usato dal workflow (e, se configurato, dal Judge). \\
+FastAPI e Pydantic & API del sistema e controllo della forma dei dati scambiati. \\
+Docker Compose & Avvio coordinato dei servizi sulla rete \texttt{pecillispace}. \\
+Prometheus e Grafana & Raccolta delle metriche e diagnosi aggregata LLMOps. \\
+OpenTelemetry e Phoenix & Tracciamento delle singole esecuzioni. \\
+Open WebUI (opzionale) & Client legacy di chat; profilo Compose \texttt{legacy-ui}. \\
+\bottomrule
+\end{tabularx}
+\caption{Tecnologie del nucleo applicativo, del catalogo e dell'osservabilità.}
+\label{tab:tecnologie-abilitanti}
+\end{table}
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.88\textwidth]{Images/screenshots/diagramma_flusso.png}
+\caption{Flusso di elaborazione sintetico: dalla domanda in linguaggio naturale
+alla risposta con dashboard, mappa e fonti. Il gateway distingue Discovery e
+percorso operativo prima della selezione delle sorgenti.}
+\label{fig:diagramma-flusso}
+\end{figure}
+
 \section{Vista architetturale}
 
 L'applicazione segue una struttura a componenti. La dashboard nativa gestisce
@@ -248,8 +369,11 @@ compatibilità spaziale e temporale, tipo di risorsa, servizio preferito), con
 penalità per incompatibilità e normalizzazione finale in $[0,1]$. La selezione
 ammette candidati con punteggio almeno $\max(0{,}28,\mathrm{best}-0{,}20)$ e
 al più 30 risorse; se sono richieste più variabili esplicite, viene forzata la
-presenza di un rappresentante per ciascuna. Metadati assenti riducono i bonus
-disponibili senza inventare copertura. Il nome ``Agent'' identifica una
+presenza di un rappresentante per ciascuna. La descrizione disponibile non riporta qui la formula completa, i pesi,
+l'ordine dei candidati prima del limite e la gestione dei pareggi: soglie e
+feature non bastano quindi a riprodurre lo score. Il trattamento dei metadati
+assenti e la regola sulle variabili richiedono verifica nel codice prima di
+interpretarli come garanzia di compatibilità. Il nome ``Agent'' identifica una
 responsabilità del workflow, non un componente che effettua inferenza
 linguistica.
 
@@ -258,8 +382,10 @@ massimo 30 candidati prima del ranking. Il ranking può quindi ordinare soltanto
 ciò che il recupero gli consegna: qualità del retrieval e qualità
 dell'ordinamento restano distinte. La ground truth del benchmark usa spesso un
 target unico; una domanda di Discovery può però ammettere più risorse valide, e
-la mancata citazione del target è critica soprattutto quando l'unicità è
-giustificata dai metadati. La risposta e l'artefatto riportano identificativi,
+il controllo critico sulla citazione deve essere interpretato rispetto
+all'unicità del riferimento. In mancanza di una regola verificata sulle
+alternative, un risultato valido diverso dal target può essere penalizzato:
+questo è un limite del benchmark, non una prova di errore della risorsa. La risposta e l'artefatto riportano identificativi,
 metadati e collegamenti delle risorse selezionate \cite{guidaProgetto2026}.
 
 \section{Catalogo a grafo e pipeline di harvesting}
@@ -392,7 +518,7 @@ Discovery retrieve & No & No & Query Nebula parametrizzate \\
 \addlinespace[1pt]
 Discovery rank & No & Secondo regole fisse & Ordinamento \texttt{graph-score-v1} \\
 \addlinespace[1pt]
-Worker fonti & Ibrido & Esecuzione del piano & Recupero Search/GDACS/STAC/CEMS \\
+Worker fonti & Ibrido & Esecuzione del piano & Recupero Search, GDACS, STAC e CEMS \\
 \addlinespace[1pt]
 Chart / Validator & No & No & Aggregazioni e riparazione viste \\
 \addlinespace[1pt]
@@ -423,8 +549,9 @@ Lo stato LangGraph estende \texttt{MessagesState} e contiene richiesta
 risolta, piano, azione di follow-up, risultati delle quattro fonti, grafici,
 dashboard e risposta finale. Per la dashboard conserva inoltre filtri collegati,
 stato visuale, revisioni e conversazioni contestuali per settore. Ogni campo è
-associato a un \texttt{thread\_id}; conversazioni diverse non condividono
-quindi la memoria.
+associato a un \texttt{thread\_id}, che separa logicamente i checkpoint.
+L'isolamento tra utenti richiede inoltre l'autorizzazione sull'identificativo
+di conversazione e sugli artefatti; il solo nome della chiave non la dimostra.
 
 Il ramo Discovery aggiunge intento, risorse recuperate e selezionate e
 riferimento al proprio artefatto. Questi dati appartengono al contesto della
@@ -505,8 +632,13 @@ del contenitore e ridimensiona ECharts dopo il caricamento e quando la sezione
 viene riaperta.
 
 Queste regole non sostituiscono la validazione semantica: prima di salvare una
-modifica, il Validator riallinea etichette, valori e serie e converte valori
-non validi in valori numerici sicuri. Ogni grafico offre anche una tabella dei
+modifica, il Validator controlla l'allineamento di etichette, valori e serie.
+Un valore mancante e uno zero osservato hanno significati diversi: una
+riparazione di formato non deve essere interpretata come recupero del dato.
+La politica effettiva di esclusione, sostituzione o rifiuto dei valori non
+validi richiede riscontro nell'implementazione e nei test; la validazione del
+payload non costituisce da sola una garanzia di correttezza semantica.
+Ogni grafico offre anche una tabella dei
 dati e l'esportazione CSV, così che il risultato visivo resti verificabile.
 
 \section{Integrazione MCP}
