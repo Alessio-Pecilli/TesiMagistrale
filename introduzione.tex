@@ -8,18 +8,18 @@ di aggiornamento, formati e livelli di affidabilità propri.
 Si consideri, ad esempio, una richiesta sui terremoti avvenuti in Italia
 nell'ultima settimana e sulla relativa copertura satellitare. La prima parte
 richiede un elenco di eventi e dei rispettivi livelli di allerta; la seconda
-riguarda la disponibilità di osservazioni della Terra, non la misura dei danni.
-Un'eventuale attivazione di un servizio di emergenza aggiunge poi informazioni
-su aree di interesse e prodotti cartografici. Riunire questi elementi in una
-sola risposta è utile soltanto se la loro provenienza rimane riconoscibile.
+riguarda la disponibilità di osservazioni della Terra. Un'eventuale attivazione
+di un servizio di emergenza aggiunge poi informazioni su aree di interesse e
+prodotti cartografici. Riunire questi elementi in una sola risposta è utile
+soltanto se la loro provenienza rimane riconoscibile.
 
 Questa tesi affronta il problema realizzando \emph{Copernicus Data Workspace}:
 uno spazio di lavoro conversazionale che coordina fonti geospaziali indipendenti.
 L'utente formula la richiesta in linguaggio naturale; il sistema ne ricava
 luogo, periodo e obiettivo, sceglie le fonti pertinenti e restituisce testo,
-dati strutturati e visualizzazioni. Il modello linguistico aiuta a interpretare
-la domanda e a formulare la risposta, ma non viene trattato come archivio degli
-eventi né come origine dei valori mostrati nei grafici.
+dati strutturati e visualizzazioni. Il modello linguistico fa da interprete:
+comprende la domanda e formula la risposta, mentre gli eventi e i valori
+mostrati nei grafici provengono dalle fonti consultate.
 
 \section{Posizionamento rispetto ai lavori correlati}
 
@@ -28,15 +28,14 @@ strumenti esterni. ReAct studia l'alternanza tra ragionamento e azione;
 Toolformer affronta l'apprendimento dell'uso delle API
 \cite{yaoReAct,schickToolformer}. Il function calling documenta invece un
 meccanismo applicativo per collegare il modello a funzioni eseguibili
-\cite{openaiFunctionCalling}: non è di per sé un'architettura multiagente.
+\cite{openaiFunctionCalling}.
 
 Nel dominio dell'osservazione della Terra, Earth Copilot nasce dalla
 collaborazione NASA--Microsoft per rendere interrogabili dati geospaziali
-attraverso domande in linguaggio naturale \cite{earthCopilot2024}.
-La documentazione pubblica descrive finalità e integrazione con l'accesso ai
-dati NASA; non fornisce un confronto controllato con questo prototipo.
-Il CDSE STAC Browser offre invece navigazione e filtri sui metadati del
-catalogo, con accesso alle proprietà e agli asset dei prodotti
+attraverso domande in linguaggio naturale \cite{earthCopilot2024}; la
+documentazione pubblica ne descrive finalità e integrazione con l'accesso ai
+dati NASA. Il CDSE STAC Browser offre invece navigazione e filtri sui metadati
+del catalogo, con accesso alle proprietà e agli asset dei prodotti
 \cite{cdseStac}. È un termine di confronto per la consultazione dei cataloghi,
 mentre il workspace qui proposto aggiunge interpretazione linguistica,
 coordinamento di fonti eterogenee e continuità conversazionale.
@@ -45,26 +44,26 @@ Il posizionamento del lavoro riguarda l'integrazione di questi bisogni:
 Discovery di risorse catalogate, ricerca STAC live e consultazione di eventi
 e attivazioni. MCP \cite{mcpSpec} delimita l'accesso a GDACS e CEMS;
 il catalogo a grafo conserva le gerarchie delle risorse e il ranking applica
-regole esplicite. Il contributo è un'architettura applicativa e il relativo
-protocollo di verifica. Non viene rivendicato un nuovo algoritmo di retrieval
-né un vantaggio misurato rispetto ai sistemi citati.
+regole esplicite. Il contributo è un'architettura applicativa, costruita su
+tecniche di retrieval esistenti, insieme al relativo protocollo di verifica.
 
 \section{Il problema affrontato}
 
 Le applicazioni conversazionali rendono semplice l'accesso a servizi che, presi
 singolarmente, richiederebbero la conoscenza di endpoint, parametri e formati di
-risposta. La semplificazione dell'interfaccia non elimina però la complessità
-dei dati sottostanti. Nel percorso operativo sono coinvolte tre famiglie di
-informazioni, alle quali si affianca un catalogo trasversale di metadati.
+risposta. La complessità dei dati sottostanti, però, rimane. Nel percorso
+operativo sono coinvolte tre famiglie di informazioni, alle quali si affianca
+un catalogo trasversale di metadati.
 
 GDACS pubblica eventi e allerte relativi a disastri naturali. Il catalogo del
 Copernicus Data Space Ecosystem descrive invece le acquisizioni satellitari
 disponibili per una certa area e un certo periodo. Copernicus Emergency
 Management Service documenta attivazioni e prodotti cartografici predisposti a
 supporto della gestione delle emergenze. Queste fonti possono essere consultate
-nello stesso turno, ma non devono essere fuse come se misurassero la stessa
-grandezza. Il numero di acquisizioni satellitari, per esempio, non esprime la
-gravità di un evento.
+nello stesso turno e ciascuna conserva il proprio significato: il numero di
+acquisizioni satellitari, per esempio, misura la disponibilità di osservazioni,
+mentre una prima stima della gravità di un evento viene dai livelli di
+allerta GDACS.
 
 Alla distinzione semantica si aggiunge quella tecnica. GDACS distribuisce anche
 feed XML, il catalogo satellitare espone un'interfaccia STAC e CEMS adotta
@@ -75,16 +74,15 @@ capire se un'informazione sia stata recuperata oppure generata dal modello.
 
 Anche l'interpretazione linguistica deve essere verificata. Un LLM sa trattare
 espressioni come ``la settimana scorsa'', riconoscere un codice CEMS e comporre
-un testo leggibile, ma la sua conoscenza può essere incompleta o non aggiornata.
-La plausibilità di una frase non dimostra che il dato corrispondente esista nella
-fonte consultata. Nel progetto interpretazione, accesso ai servizi e calcoli sono
-perciò passaggi separati.
+un testo leggibile, ma la sua conoscenza può essere incompleta o datata: una
+frase plausibile va riscontrata nella fonte consultata. Nel progetto
+interpretazione, accesso ai servizi e calcoli sono perciò passaggi separati.
 
 I turni successivi richiedono inoltre di conservare il contesto. Dopo una tabella
 o un grafico, l'utente può chiedere di mostrare una sola piattaforma, cambiare
 l'aggregazione o aggiornare una sorgente. Il significato di questi comandi
-dipende dai risultati precedenti; lo stato deve quindi essere associato alla
-conversazione senza inserire ogni dato remoto nell'intera cronologia testuale.
+dipende dai risultati precedenti; lo stato è quindi associato alla
+conversazione, mentre i dati remoti restano fuori dalla cronologia testuale.
 
 La verificabilità riguarda sia il testo sia le visualizzazioni. Link,
 identificativi, timestamp e criteri di aggregazione fanno parte del risultato.
@@ -95,12 +93,12 @@ proporre la vista, mentre conteggi e misure vengono calcolati dal software.
 
 L'obiettivo è un prototipo che trasformi una richiesta geografica in un percorso
 di consultazione controllato. Il sistema deve poter interrogare più fonti quando
-la domanda lo richiede, continuare a produrre una risposta se una sorgente
-secondaria non è disponibile e mantenere il contesto necessario per i turni
-successivi. I risultati devono restare associati alla fonte dalla quale
+la domanda lo richiede, continuare a produrre una risposta anche quando una
+sorgente secondaria è indisponibile e mantenere il contesto necessario per i
+turni successivi. I risultati devono restare associati alla fonte dalla quale
 provengono.
 
-La tesi non addestra un nuovo modello linguistico. Studia l'architettura che lo
+La tesi impiega modelli linguistici esistenti e studia l'architettura che li
 circonda: ammissione della domanda nel dominio, risoluzione dei parametri,
 scelta delle sorgenti e restituzione dei risultati nel workspace. Le ambiguità
 linguistiche sono affidate al modello; schemi, filtri, calcoli e persistenza
@@ -110,12 +108,7 @@ Il contributo dichiarato è \textbf{progettuale e implementativo}: un prototipo
 con responsabilità specializzate, percorsi Discovery/operativo controllati e
 artefatti verificabili. Il titolo parla di approccio multiagentico perché il
 workflow coordina componenti decisionali basati su LLM con responsabilità
-specializzate, affiancati da nodi deterministici di recupero e trasformazione;
-questa organizzazione non è però confrontata, in questa tesi, con un agente
-singolo o con una pipeline più semplice nelle stesse condizioni. Non si
-sostiene quindi un vantaggio quantitativo di accuratezza, latenza o costo
-rispetto a tali alternative: tale affermazione richiederebbe una baseline
-controllata.
+specializzate, affiancati da nodi deterministici di recupero e trasformazione.
 
 Il percorso \textbf{operativo} combina la ricerca web con tre fonti strutturate.
 GDACS fornisce eventi e allerte; il catalogo STAC di Copernicus descrive
@@ -128,31 +121,28 @@ Il percorso di \textbf{Discovery} affronta una domanda complementare: quali
 risorse Copernicus permettono di studiare una certa variabile, area o periodo?
 Tre harvester raccolgono metadati Marine, CDSE/STAC e Drought in NebulaGraph.
 Il workflow consulta questo grafo per individuare dataset, variabili,
-collezioni e layer pertinenti. La scoperta di un dataset di temperatura non
-equivale al download dei suoi valori; analogamente, il catalogo locale non
-sostituisce la ricerca delle acquisizioni sul servizio STAC remoto. Sono
-ammessi anche percorsi \textbf{combinati}, in cui Discovery e analisi operativa
-convivono nella stessa sessione senza confondere metadati di catalogo e scene
+collezioni e layer pertinenti. La Discovery indica quali risorse esistono, per
+esempio un dataset di temperatura, e come raggiungerle; la ricerca delle
+singole acquisizioni resta affidata al servizio STAC remoto. Sono ammessi anche
+percorsi \textbf{combinati}, in cui Discovery e analisi operativa convivono
+nella stessa sessione mantenendo distinti metadati di catalogo e scene
 satellitari live.
 
 Per GDACS e CEMS è stato adottato il Model Context Protocol. I dettagli dei due
 servizi vengono incapsulati in server separati, ai quali il backend accede
 attraverso un client comune. Il catalogo STAC live rimane integrato direttamente
 nell'applicazione. La presenza dei due approcci nello stesso progetto permette
-di confrontarne gli effetti sull'organizzazione del codice, senza assumere che
-un protocollo risolva automaticamente ogni problema di integrazione.
+di confrontarne gli effetti sull'organizzazione del codice.
 
-Il punto di ingresso è la dashboard nativa autenticata con Keycloak
-(\url{http://localhost:8080/dashboard}): home in italiano con selettore IT/EN,
-formulazione della domanda, suggerimenti e ripresa delle indagini recenti. La
-risposta operativa può includere una dashboard delle acquisizioni Copernicus.
-Grafici, indicatori, tabella e mappa derivano dai record STAC normalizzati;
-GDACS, CEMS e ricerca web restano nella parte testuale o in sezioni dedicate,
-perché le rispettive quantità non sono confrontabili nelle stesse serie.
-Durante la conversazione l'utente può applicare filtri, cambiare vista o
-chiedere una nuova aggregazione. Ogni modifica produce una revisione
-dell'artefatto, ma i valori continuano a essere calcolati sul dataset
-conservato.
+Il punto di ingresso è una dashboard web autenticata con Keycloak: home in
+italiano con selettore IT/EN, formulazione della domanda, suggerimenti e
+ripresa delle indagini recenti. La risposta operativa può includere una
+dashboard delle acquisizioni Copernicus. Grafici, indicatori, tabella e mappa
+derivano dai record STAC normalizzati; GDACS, CEMS e ricerca web restano nella
+parte testuale o in sezioni dedicate, perché le rispettive quantità hanno
+natura diversa. Durante la conversazione l'utente può applicare filtri, cambiare
+vista o chiedere una nuova aggregazione. Ogni modifica produce una revisione
+dell'artefatto e i valori sono sempre ricalcolati sul dataset conservato.
 
 La Discovery restituisce invece un artefatto di risorse catalogate con
 identificativi, descrizioni e collegamenti. Sono quindi distinte la vista dei
@@ -162,26 +152,25 @@ valutazione del workflow, descritto separatamente nel Capitolo~\ref{cap:7}.
 
 \section{Impostazione del progetto}
 
-Il repository umbrella \texttt{copernicus\_platform} orchestra backend, frontend,
-server MCP, Redis, Keycloak e harvester NebulaGraph tramite Docker Compose. La
-domanda viene prima confrontata con il dominio geografico e ambientale, poi
+L'intera piattaforma (backend, frontend, server MCP, Redis, Keycloak e
+harvester NebulaGraph) viene avviata come un insieme coordinato di container.
+La domanda viene prima confrontata con il dominio geografico e ambientale, poi
 trasformata in una rappresentazione strutturata e assegnata alle sorgenti
 pertinenti. Un grafo LangGraph stabilisce i percorsi consentiti e permette ai
-rami indipendenti di procedere in parallelo. La struttura rende ispezionabili le condizioni applicate prima di raccogliere
-i risultati; questa proprietà progettuale non costituisce una misura di
-superiorità rispetto a un agente unico.
+rami indipendenti di procedere in parallelo. La struttura rende ispezionabili
+le condizioni applicate prima di raccogliere i risultati.
 
 Ogni integrazione traduce la risposta remota in un dataset con campi stabili. I
 client possono così essere provati con input controllati e gli errori restano
-associati al servizio che li ha prodotti. Il fallimento di un ramo non elimina i
-risultati già disponibili; la risposta segnala quale fonte non ha risposto.
+associati al servizio che li ha prodotti. Se un ramo fallisce, i risultati già
+disponibili vengono conservati e la risposta segnala la fonte mancante.
 
 La memoria è gestita come stato applicativo. A ogni conversazione è associato
 un checkpoint Redis che comprende i messaggi necessari, i risultati delle
 sorgenti e i riferimenti agli artefatti. Un turno successivo può così
 riutilizzare un dataset o aggiornare soltanto la parte indicata dall'utente.
-La memoria non modifica i parametri del modello e non costituisce una base di
-conoscenza permanente condivisa fra utenti diversi.
+La memoria è propria di ciascuna conversazione e lascia invariati i parametri
+del modello.
 
 La verifica software copre parsing dei feed, filtri e aggregazioni con test
 unitari; i percorsi del workflow vengono provati con dipendenze simulate; API,
@@ -198,29 +187,36 @@ osservabilità e valutazione.
 La descrizione dell'implementazione si basa sul codice del prototipo e sulla
 guida tecnica del progetto \cite{guidaProgetto2026}.
 
-Il prototipo non è uno strumento operativo di protezione civile e non sostituisce
-le comunicazioni delle autorità competenti. GDACS offre valutazioni rapide che
-possono cambiare quando vengono raccolte nuove informazioni. Le attivazioni CEMS
-documentano prodotti richiesti e realizzati in uno specifico contesto operativo.
-Il catalogo STAC indica che determinate osservazioni sono disponibili, non che
-esse siano sufficienti a stabilire l'entità di un danno.
+Il sistema è un prototipo di ricerca: le comunicazioni ufficiali in caso di
+emergenza restano di competenza delle autorità di protezione civile. GDACS
+offre valutazioni rapide che possono cambiare quando vengono raccolte nuove
+informazioni. Le attivazioni CEMS documentano prodotti richiesti e realizzati in
+uno specifico contesto operativo. Il catalogo STAC indica quali osservazioni
+sono disponibili; la stima dell'entità di un danno richiede analisi specifiche.
 
-La dashboard non esegue un'analisi scientifica delle immagini satellitari. La
-heatmap rappresenta la densità dei centri delle bounding box degli item
-recuperati, mentre i rettangoli visualizzati mostrano le estensioni delle bounding box,
-non le geometrie precise degli item. Non vengono calcolati indici
-spettrali, classificazioni del suolo o stime automatiche degli effetti di un
-evento. Tale distinzione limita le conclusioni che possono essere tratte dalle
-visualizzazioni.
+La dashboard descrive la disponibilità delle acquisizioni. La heatmap
+rappresenta la densità dei centri delle bounding box degli item recuperati e i
+rettangoli visualizzati mostrano le estensioni delle bounding box, che
+approssimano le geometrie degli item. L'analisi scientifica delle immagini
+(indici spettrali, classificazioni del suolo, stime degli effetti di un evento)
+esula dal prototipo.
 
-Anche la copertura geografica dipende dai servizi consultati. Un luogo espresso
-in linguaggio naturale deve essere risolto in coordinate o in una bounding box;
+La copertura geografica dipende dai servizi consultati. Un luogo espresso in
+linguaggio naturale deve essere risolto in coordinate o in una bounding box;
 nomi ambigui possono richiedere un chiarimento. Ricerca web, cataloghi e feed
-dipendono inoltre dalla rete e dalla disponibilità dei rispettivi fornitori. Il
-sistema gestisce errori e risultati parziali, ma non può rendere disponibile una
-fonte esterna che non risponde.
+dipendono inoltre dalla rete e dalla disponibilità dei rispettivi fornitori: il
+sistema gestisce errori e risultati parziali e segnala le fonti irraggiungibili.
+
+Sul piano della valutazione, l'organizzazione multiagente è descritta e
+verificata, ma manca ancora un confronto controllato con un agente singolo o
+con una pipeline più semplice nelle stesse condizioni; un vantaggio
+quantitativo di accuratezza, latenza o costo resta quindi da misurare. I
+giudizi dell'LLM-as-a-Judge attendono una validazione umana e la verifica
+end-to-end delle conversazioni nel browser è ancora da svolgere. Sul piano della
+sicurezza, Keycloak protegge l'interfaccia, mentre le API del backend devono
+ancora verificare il token e il proprietario degli artefatti.
 
 Per questo le risposte conservano collegamenti e identificativi, distinguono i
 dati recuperati dal testo generato e segnalano le sorgenti mancanti. Il criterio
 adottato è rendere riconoscibile il percorso con cui il risultato è stato
-costruito, anche quando non tutte le fonti sono disponibili.
+costruito, anche quando alcune fonti sono assenti.

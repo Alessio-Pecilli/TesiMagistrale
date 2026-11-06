@@ -13,7 +13,8 @@ al riferimento al pensiero, al comportamento umano o alla razionalità. Per
 descrivere il sistema sviluppato è sufficiente la loro prospettiva agentiva: un
 agente riceve percezioni dall'ambiente e sceglie azioni \cite{russellNorvigAIMA}.
 Questa definizione permette di discutere il comportamento del software senza
-attribuire al modello proprietà cognitive non osservabili.
+attribuire al modello proprietà cognitive: l'analisi resta sul piano del
+comportamento osservabile.
 
 Formalmente, un agente può essere rappresentato come una funzione che trasforma
 la storia delle osservazioni in un'azione. Se $p_1, p_2, \ldots, p_t$ sono le
@@ -26,13 +27,12 @@ comprende i messaggi e i risultati restituiti dalle fonti; le azioni sono il
 routing verso un ramo del workflow, l'invocazione di un tool o la produzione
 della risposta.
 
-Un classificatore può essere un componente della funzione di un agente, ma
-la sola classificazione non descrive il ciclo applicativo di questo progetto.
+Un classificatore può essere un componente della funzione di un agente; il
+ciclo applicativo di questo progetto comprende però anche stato, strumenti ed
+esiti delle azioni.
 Nel seguito il termine agente basato su LLM indica un componente che usa il
 modello per scegliere un'azione nel workflow; repository, filtri e ranking
-deterministici sono invece nodi di elaborazione. Questa convenzione non
-richiede che tutti gli agenti, in senso generale, conservino uno stato o
-abbiano un obiettivo persistente.
+deterministici sono invece nodi di elaborazione.
 
 \section{Apprendimento statistico e reti profonde}
 
@@ -47,8 +47,8 @@ regole e conoscenza del dominio.
 
 Il machine learning affronta diversamente il problema: il programmatore definisce
 una famiglia di modelli e una procedura di apprendimento, mentre i parametri sono
-stimati a partire dagli esempi. Sistemi simbolici e modelli appresi non
-corrispondono comunque a fasi mutuamente esclusive; nell'architettura descritta
+stimati a partire dagli esempi. Sistemi simbolici e modelli appresi possono
+comunque convivere: nell'architettura descritta
 più avanti, le decisioni probabilistiche dell'LLM convivono con regole e schemi
 di validazione scritti nel codice.
 
@@ -59,10 +59,10 @@ dati osservati. Dato un insieme di esempi:
 \[
     D = \{(x_i, y_i)\}_{i=1}^{n}
 \]
-si cerca una funzione $f_\theta$ parametrizzata da $\theta$ tale che $f_\theta(x_i)$ sia vicino a $y_i$. In classificazione, $x_i$ può essere un'immagine e $y_i$ una classe. In regressione, $y_i$ può essere un valore numerico. In apprendimento non supervisionato, l'obiettivo non è predire etichette, ma scoprire struttura nei dati: cluster, rappresentazioni compatte, anomalie o fattori latenti.
+si cerca una funzione $f_\theta$ parametrizzata da $\theta$ tale che $f_\theta(x_i)$ sia vicino a $y_i$. In classificazione, $x_i$ può essere un'immagine e $y_i$ una classe. In regressione, $y_i$ può essere un valore numerico. In apprendimento non supervisionato, l'obiettivo è scoprire struttura nei dati: cluster, rappresentazioni compatte, anomalie o fattori latenti.
 
-Rispetto a un programma tradizionale, parte del comportamento non è specificata
-direttamente nel codice. Il programmatore definisce architettura, procedura di
+Rispetto a un programma tradizionale, parte del comportamento deriva dai dati
+anziché dal codice. Il programmatore definisce architettura, procedura di
 addestramento e funzione obiettivo; il risultato dipende anche dai dati e dai
 parametri appresi.
 
@@ -109,7 +109,7 @@ procedura di addestramento.
 \subsection{Modellazione del linguaggio}
 
 Il linguaggio naturale presenta ambiguità, dipendenze dal contesto e riferimenti a
-conoscenze non espresse nella frase. I sistemi di NLP hanno a lungo combinato
+conoscenze implicite. I sistemi di NLP hanno a lungo combinato
 regole linguistiche, feature manuali e modelli statistici; il deep learning ha
 poi favorito rappresentazioni dense e reti neurali sequenziali.
 
@@ -159,17 +159,15 @@ del contesto è una proprietà distinta.
 
 I parametri sono i valori numerici appresi, organizzati principalmente in matrici
 di pesi e vettori di bias. GPT-3, per esempio, è stato presentato come un modello
-autoregressivo da 175 miliardi di parametri \cite{brownGPT3}. La sola dimensione
-non misura la qualità di un modello: architettura, dati e addestramento incidono
-sul risultato, mentre l'aumento dei parametri comporta maggiori costi di memoria
+autoregressivo da 175 miliardi di parametri \cite{brownGPT3}. La qualità di un
+modello dipende, oltre che dalla dimensione, da architettura, dati e addestramento, mentre l'aumento dei parametri comporta maggiori costi di memoria
 e calcolo.
 
-Un parametro non corrisponde a una frase memorizzata, ma è un coefficiente che
-contribuisce a molte predizioni. L'informazione appresa è distribuita tra i
+Un parametro è un coefficiente che contribuisce a molte predizioni. L'informazione appresa è distribuita tra i
 pesi, mentre un database conserva record espliciti e li recupera senza
 generarli. La distinzione è rilevante per questo lavoro: i dati su eventi e
-acquisizioni satellitari devono provenire dalle fonti interrogate dal sistema,
-non dalla memoria parametrica del modello.
+acquisizioni satellitari devono provenire dalle fonti interrogate dal sistema
+anziché dalla memoria parametrica del modello.
 
 Durante l'inferenza, il modello riceve un prompt, cioè una sequenza di input, e produce una distribuzione di probabilità sul token successivo. La generazione procede iterativamente: il token scelto viene aggiunto al contesto e il processo continua. Parametri di decoding come temperatura, top-$p$ o penalità di ripetizione modificano il modo in cui si campiona dalla distribuzione, influenzando determinismo e varietà dell'output.
 
@@ -180,9 +178,9 @@ collezioni di testo e, spesso, un successivo adattamento alle istruzioni. Nel
 contesto applicativo di questa tesi, l'uso del solo modello lascia irrisolti tre
 problemi:
 \begin{itemize}
-    \item \textbf{Conoscenza statica}: i parametri riflettono il training set e non si aggiornano automaticamente;
+    \item \textbf{Conoscenza statica}: i parametri riflettono il training set e restano fermi alla data dell'addestramento;
     \item \textbf{Allucinazione}: il modello può generare testo plausibile ma falso;
-    \item \textbf{Assenza di effetti esterni}: un modello che produce solo testo non può eseguire comandi, leggere documenti aggiornati o interagire con il mondo.
+    \item \textbf{Assenza di effetti esterni}: un modello che produce solo testo ha bisogno di componenti esterni per eseguire comandi, leggere documenti aggiornati o interagire con il mondo.
 \end{itemize}
 
 Fonti aggiornate, memoria e azioni devono quindi essere fornite da componenti
@@ -199,15 +197,14 @@ La letteratura recente ha studiato esplicitamente l'alternanza tra ragionamento
 e azione. ReAct combina tracce di ragionamento e invocazioni di strumenti nello
 stesso processo decisionale \cite{yaoReAct}; Toolformer affronta invece il
 problema di apprendere quando e come richiamare API esterne
-\cite{schickToolformer}. Il progetto qui presentato non addestra un nuovo modello: applica questi
-principi a un workflow LangGraph controllato (\emph{Copernicus Data Workspace}),
+\cite{schickToolformer}. Il progetto qui presentato applica questi
+principi, con modelli già addestrati, a un workflow LangGraph controllato (\emph{Copernicus Data Workspace}),
 nel quale le decisioni dell'LLM sono validate da schemi e regole prima
 dell'esecuzione sulle sorgenti.
 
-Il passaggio dai sistemi simbolici agli agenti contemporanei non va inteso come
-una sostituzione lineare: regole esplicite e modelli appresi convivono nelle
+Il passaggio dai sistemi simbolici agli agenti contemporanei è graduale: regole esplicite e modelli appresi convivono nelle
 stesse architetture. In questa prospettiva, il modello linguistico è una
-componente dell'agente e non la sua intera implementazione. Nel prototipo
+componente dell'agente, affiancata da altre. Nel prototipo
 azioni, memoria Redis, artefatti dashboard e controlli restano affidati a
 componenti software separati. Il capitolo seguente esamina MCP, il protocollo
 adottato per collegare alcuni di questi componenti a GDACS e CEMS.

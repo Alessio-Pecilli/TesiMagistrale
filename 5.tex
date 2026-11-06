@@ -1,9 +1,8 @@
 Per collegare l'architettura al comportamento osservabile, il capitolo segue
 alcune richieste dall'ingresso in \emph{Copernicus Data Workspace} fino alla
-risposta. Gli scenari sono ricavati dai contratti e dai rami implementati nel
-codice; i valori citati illustrano il flusso e non costituiscono risultati
-relativi a un evento reale. I risultati di benchmark riportati sono presentati
-separatamente nel Capitolo~\ref{cap:7}.
+risposta. Gli scenari sono ricavati dal comportamento implementato e i valori
+citati hanno scopo illustrativo. I risultati di benchmark sono presentati nel
+Capitolo~\ref{cap:7}.
 
 \section{Ingresso della richiesta}
 
@@ -11,19 +10,17 @@ Dalla home del workspace l'utente descrive luogo, fenomeno e periodo e avvia
 una nuova analisi; può anche riprendere un'indagine precedente che conserva
 dashboard, filtri e contesto. La dashboard invia i messaggi al backend mediante
 l'endpoint compatibile con le chat completion OpenAI. La richiesta contiene
-modello, cronologia, opzione di streaming e metadati utili a ricavare
+modello, cronologia, opzione di streaming e i metadati da cui si ricava
 l'identificativo della conversazione. Il backend normalizza tale
-identificativo, quindi invoca il \texttt{WorkflowAgent}. La normalizzazione o
-l'eventuale trasformazione in hash non dimostrano l'anonimato della conversazione.
+identificativo e avvia il workflow.
 
-Nel client legacy Open WebUI possono comparire anche richieste tecniche
-generate dall'interfaccia (titolo della chat, suggerimenti). Questi task non
-devono essere scambiati per domande geografiche e vengono gestiti
-separatamente.
+Nel client legacy Open WebUI compaiono anche richieste tecniche generate
+dall'interfaccia (titolo della chat, suggerimenti), che il sistema riconosce e
+gestisce separatamente dalle domande geografiche.
 
-Il nodo \texttt{ingress} estrae l'ultimo messaggio umano e ripulisce eventuali
-marcatori dell'interfaccia. Il Gateway decide quindi se procedere. Da questo
-punto sono possibili tre casi:
+Il primo nodo del workflow estrae l'ultimo messaggio dell'utente e lo ripulisce
+dai marcatori dell'interfaccia. Il Gateway decide quindi come procedere. Da
+questo punto sono possibili tre casi:
 
 \begin{enumerate}
     \item nuova richiesta ammessa: parsing e routing completi;
@@ -46,21 +43,21 @@ negli ultimi sette giorni e fammi vedere la copertura satellitare.''}
 Il parser produce una richiesta strutturata simile alla seguente:
 
 \begin{itemize}
-    \item categoria: \texttt{hazard}, sottotipo terremoto;
+    \item categoria: pericolo, sottotipo terremoto;
     \item luogo: Italia, con bounding box quando il geocoding è disponibile;
     \item periodo: intervallo assoluto corrispondente agli ultimi sette giorni;
     \item filtro: magnitudo maggiore di 4,5;
     \item viste: dati strutturati e mappa.
 \end{itemize}
 
-Il valore temporale non viene lasciato come testo ambiguo. È risolto rispetto
-all'istante corrente e al fuso orario del backend. Anche il luogo viene
-trasformato, quando possibile, da etichetta a geometria.
+Il riferimento temporale viene risolto in date precise rispetto all'istante
+corrente e al fuso orario del backend; il luogo viene trasformato, quando
+possibile, da etichetta a geometria.
 
 \subsection{Pianificazione ed esecuzione}
 
 Poiché la categoria è un pericolo, il piano comprende Search, GDACS e
-Copernicus STAC. I tre worker possono iniziare in parallelo:
+Copernicus STAC. I tre worker partono in parallelo:
 
 \begin{itemize}
     \item Search recupera contesto web attuale;
@@ -68,31 +65,28 @@ Copernicus STAC. I tre worker possono iniziare in parallelo:
     \item STAC interroga CDSE per area, periodo e collezioni.
 \end{itemize}
 
-Il filtro GDACS combina tutte le condizioni. Se sono presenti coordinate, la
-verifica spaziale usa la bounding box del luogo invece di affidarsi soltanto al
-nome del paese. Una bounding box nazionale (per esempio dell'Italia) è un
-rettangolo che può includere aree esterne al territorio: è un filtro
-geometrico, non una verifica di appartenenza amministrativa. Per una richiesta
-cittadina il sistema non degrada automaticamente l'ambito all'intero Stato.
-Periodo, magnitudo, tipo e posizione devono essere soddisfatti dallo stesso
-record. La risposta si limita agli eventi presenti nel feed interrogato: non è
-un censimento completo di tutti i fenomeni nella regione.
+Il filtro GDACS richiede che periodo, magnitudo, tipo e posizione siano
+soddisfatti dallo stesso record. Se sono presenti coordinate, la verifica
+spaziale usa la bounding box del luogo oltre al nome del paese. Una bounding
+box nazionale è un rettangolo e può includere aree confinanti: funziona quindi
+come filtro geometrico. Per una richiesta cittadina il sistema mantiene
+l'ambito della città. La risposta riporta gli eventi presenti nel feed
+interrogato.
 
 Il client STAC invia una ricerca con bounding box e intervallo ISO 8601. Per
 intervalli o aree estesi può suddividere la richiesta in partizioni temporali
-e quadranti, con limiti sul numero di tentativi. I risultati sono ridotti ai
-metadati utili e deduplicati per identificativo. Il client non segue le
-pagine successive della risposta STAC: per aree o periodi molto ampi il
-numero di prodotti mostrato può quindi essere inferiore a quello disponibile
-nel catalogo, e i conteggi vanno letti come riferiti ai risultati recuperati.
+e quadranti, con un numero limitato di tentativi. I risultati sono ridotti ai
+metadati utili e deduplicati per identificativo. Il client legge soltanto la
+prima pagina di risultati di ciascuna ricerca: per aree o periodi molto ampi
+i conteggi si riferiscono quindi ai prodotti recuperati, che possono essere
+meno di quelli presenti nel catalogo.
 
 \subsection{Sincronizzazione e risposta}
 
 LangGraph attende la convergenza dei worker. Il Chart Agent riceve soltanto
 dataset normalizzati e aggregazioni; il renderer della mappa riceve bounding
-box e relativi centri. Nel percorso operativo, le acquisizioni STAC alimentano inoltre
-un artefatto dashboard incorporato nel workspace. Il Conversation Agent compone
-infine:
+box e relativi centri. Le acquisizioni STAC alimentano inoltre un artefatto
+dashboard incorporato nel workspace. Il Conversation Agent compone infine:
 
 \begin{enumerate}
     \item sintesi testuale;
@@ -130,9 +124,9 @@ infine:
     \draw[return] (6.4,-6.0) -- node[above]{risposta finale} (3.2,-6.0);
     \draw[return] (3.2,-6.6) -- node[above]{stream SSE} (0,-6.6);
 \end{tikzpicture}}
-\caption{Sequenza end-to-end di una richiesta multi-sorgente. L'artefatto
-dashboard è costruito nel workflow a partire dai record STAC normalizzati; la
-vista nel browser lo carica e lo presenta, senza ricalcolarne i valori.}
+\caption{Sequenza end-to-end di una richiesta multi-sorgente. Il workflow
+costruisce l'artefatto dashboard a partire dai record STAC normalizzati; il
+browser lo carica e lo presenta così com'è.}
 \label{fig:sequenza-end-to-end}
 \end{figure}
 
@@ -144,23 +138,21 @@ La domanda:
 \emph{``Dammi i dettagli dell'attivazione Copernicus EMSR884.''}
 \end{quote}
 
-contiene un identificativo non ambiguo. Il ramo CEMS risponde alla domanda
-diretta; nel prototipo attuale il piano operativo può comunque attivare anche
-Search e STAC come \emph{arricchimento} per contesto e dashboard. È una scelta
-di prodotto, non una necessità semantica della sola richiesta di dettaglio: a
-parità di domanda, aumenta latenza e dipendenze. Il CEMS Router valida il
-codice con il formato \texttt{EMSR\#\#\#} o \texttt{EMSN\#\#\#} e sceglie
-l'endpoint corretto.
+contiene un identificativo univoco. Il ramo CEMS risponde alla domanda
+diretta; nel prototipo il piano può attivare anche Search e STAC come
+\emph{arricchimento} per contesto e dashboard. Si tratta di una scelta di
+prodotto, che aggiunge latenza e dipendenze rispetto alla sola richiesta di
+dettaglio. Il CEMS Router valida il codice nel formato \texttt{EMSR\#\#\#} o
+\texttt{EMSN\#\#\#} e sceglie l'endpoint corretto.
 
 Per \texttt{EMSR} vengono consultati i dettagli Rapid Mapping; per
 \texttt{EMSN} quelli Risk and Recovery. Il dataset restituito può includere
 paese, categoria, stato, istante di attivazione, aree di interesse, numero e
 tipo dei prodotti, URL di download o mappe.
 
-Se una successiva domanda chiede anche le acquisizioni Sentinel nella medesima
-area, il ramo CEMS può essere eseguito prima di STAC. Le coordinate o
-l'estensione dell'attivazione vengono usate per arricchire la ricerca, evitando
-un geocoding generico.
+Se una domanda successiva chiede anche le acquisizioni Sentinel nella medesima
+area, il ramo CEMS viene eseguito prima di STAC e le coordinate
+dell'attivazione guidano direttamente la ricerca satellitare.
 
 \section{Scenario 3: follow-up e riuso della memoria}
 
@@ -170,31 +162,28 @@ Dopo una prima risposta l'utente può scrivere:
 \emph{``Ora raggruppali per giorno e mostrami un grafico a barre.''}
 \end{quote}
 
-Il messaggio dipende dal contesto. Nell'esempio si assume che l'artefatto
-selezionato sia quello delle acquisizioni STAC; se il turno precedente
-conteneva anche eventi GDACS, il pronome ``li'' da solo non identifica una
-sorgente univoca. In assenza di un riferimento sufficiente occorre chiedere
-quale dataset raggruppare. Il Gateway riceve una vista compatta dello stato e riconosce la
-continuità del dominio. Il Conversation Agent pianifica quindi una delle
-azioni di follow-up:
+Il messaggio dipende dal contesto. Nell'esempio l'artefatto selezionato è
+quello delle acquisizioni STAC; se il turno precedente conteneva anche eventi
+GDACS, il sistema lavora sul dataset attivo nella conversazione; per
+raggruppare un altro dataset l'utente lo indica esplicitamente. Il Gateway riceve una vista compatta dello stato e riconosce la
+continuità del dominio. Il Conversation Agent sceglie quindi una delle azioni
+di follow-up:
 
 \begin{itemize}
-    \item \texttt{answer\_from\_context}, per spiegare dati già presenti;
-    \item \texttt{render\_chart} o \texttt{render\_heatmap}, per una nuova
-    vista dello stesso dataset;
+    \item risposta basata sui dati già presenti;
+    \item nuovo grafico o nuova heatmap dello stesso dataset;
     \item aggiornamento di una singola sorgente;
     \item aggiornamento di più sorgenti;
-    \item \texttt{new\_request}, se l'utente cambia oggetto.
+    \item nuova richiesta, se l'utente cambia oggetto.
 \end{itemize}
 
-Nel caso dell'esempio non è necessario ripetere le chiamate GDACS e STAC. Il
-Chart Agent usa il dataset conservato in Redis e aggiorna la visualizzazione.
-Se l'utente opera nella dashboard, il Composer traduce il comando in una
-mutazione tipizzata e il backend salva una nuova revisione dell'artefatto.
-Il riuso evita nuove chiamate alle sorgenti e può ridurre il traffico e la
-latenza associati al recupero. Il beneficio netto sui tempi richiede una
-misura controllata; rimangono inoltre l'età dei dati e la necessità di un
-aggiornamento esplicito quando l'utente richiede informazioni correnti.
+Nell'esempio il Chart Agent usa il dataset conservato in Redis e aggiorna la
+visualizzazione, senza ripetere le chiamate GDACS e STAC. Se l'utente opera
+nella dashboard, il Composer traduce il comando in una mutazione tipizzata e
+il backend salva una nuova revisione dell'artefatto. Il riuso risparmia
+chiamate alle sorgenti e il relativo traffico; il guadagno sui tempi
+richiederebbe una misura controllata. Quando l'utente chiede informazioni
+correnti, il sistema aggiorna esplicitamente le fonti.
 
 \begin{figure}[htbp]
 \centering
@@ -231,11 +220,11 @@ Si consideri la richiesta:
 quale variabile contiene?''}
 \end{quote}
 
-Il Gateway deve riconoscere un compito di Discovery. Il nodo d'intento
-rappresenta il tema temperatura superficiale, l'area Mar Nero, la risoluzione
-oraria e il tipo dataset con variabile. Il servizio recupera candidati dal
-sottografo Marine, ne verifica la compatibilità e applica il ranking
-deterministico descritto nella Sezione~\ref{subsec:discovery-workflow}.
+Il Gateway riconosce un compito di Discovery. Il nodo d'intento rappresenta il
+tema temperatura superficiale, l'area Mar Nero, la risoluzione oraria e il
+tipo dataset con variabile. Il servizio recupera candidati dal sottografo
+Marine, ne verifica la compatibilità e applica il ranking deterministico
+descritto nella Sezione~\ref{subsec:discovery-workflow}.
 
 Lo snapshot di riferimento del benchmark, salvato il 13 ottobre 2026 e riportato
 nella guida \cite{guidaProgetto2026}, associa questa ricerca al dataset
@@ -243,33 +232,29 @@ nella guida \cite{guidaProgetto2026}, associa questa ricerca al dataset
 \emph{Black Sea Diurnal Subskin SST Analysis, L4, 1/16deg hourly}, con variabile
 \texttt{analysed\_sst}. La bounding box registrata è
 $[26{,}375; 38{,}75; 42{,}375; 48{,}8125]$ nell'ordine ovest, sud, est, nord.
-Sono metadati dello snapshot; non costituiscono una nuova lettura del database
-né una misura della temperatura.
+Si tratta di metadati del catalogo, utili a individuare la fonte.
 
-La risposta deve rendere riconoscibili dataset, variabile e provenienza.
-L'artefatto consente di consultare le risorse selezionate; non va popolato con
-acquisizioni Sentinel come se fossero osservazioni della variabile Marine.
-L'esempio distingue così la scoperta della fonte scientifica dalla ricerca di
-scene satellitari e dall'eventuale analisi dei valori, che resta fuori perimetro.
+La risposta presenta dataset, variabile e provenienza, e l'artefatto permette
+di consultare le risorse selezionate. La scoperta della fonte scientifica
+resta così distinta dalla ricerca di scene satellitari; l'analisi dei valori
+della variabile è fuori dal perimetro del prototipo.
 
 Se un turno successivo chiede le acquisizioni relative alla stessa area, il
-passaggio al percorso operativo deve conservare il riferimento geografico.
-Verificare questa continuità richiede di confrontare intento, query effettiva,
-artefatto persistito e viste rese dal browser. Il solo cambio della scheda
-visuale non prova che sia stata eseguita una ricerca corretta. Questo controllo
-conversazionale è distinto dai casi a thread nuovo del benchmark.
+passaggio al percorso operativo conserva il riferimento geografico. Per
+verificarlo occorre confrontare intento, query effettiva, artefatto salvato e
+viste mostrate nel browser; questo controllo conversazionale è distinto dai
+casi a thread nuovo del benchmark.
 
 \section{Dashboard Copernicus}
 
 La dashboard analitica è il canale principale per le visualizzazioni delle
-acquisizioni satellitari. Nel ramo operativo viene prodotta e aperta nel
-workspace come artefatto a sé (vista ``Analisi dati Copernicus''), con
-navigazione dedicata a risultato, grafici, mappa, dati e attività, più una
-chat laterale sul risultato già caricato. Grafici, KPI, tabella e heatmap
-usano esclusivamente record STAC Copernicus normalizzati; Search, GDACS e CEMS
-restano nella risposta testuale o in sezioni separate. La scelta evita di
-mescolare, per esempio, il numero di eventi GDACS con il numero di prodotti
-satellitari.
+acquisizioni satellitari. Nel ramo operativo viene aperta nel workspace come
+artefatto a sé (vista ``Analisi dati Copernicus''), con navigazione dedicata a
+risultato, grafici, mappa, dati e attività, più una chat laterale sul
+risultato già caricato. Grafici, KPI, tabella e heatmap usano esclusivamente
+record STAC Copernicus normalizzati; Search, GDACS e CEMS compaiono nella
+risposta testuale o in sezioni separate. In questo modo, per esempio, il
+numero di eventi GDACS e il numero di prodotti satellitari restano separati.
 
 \begin{figure}[htbp]
 \centering
@@ -280,25 +265,24 @@ Risultato/Grafici/Mappa/Dati e chat laterale sul risultato già caricato.}
 \label{fig:ui-workspace-session}
 \end{figure}
 
-Il ramo Discovery presenta invece un artefatto del catalogo: schede e metadati
-delle risorse pertinenti. Le due viste rispondono a compiti diversi e devono
-mantenere esplicita la provenienza.
+Il ramo Discovery presenta invece un artefatto del catalogo, con schede e
+metadati delle risorse pertinenti. Le due viste rispondono a compiti diversi e
+indicano ciascuna la propria provenienza.
 
 \subsection{Dati, provenienza e composizione}
 
 Il Chart Agent costruisce una specifica JSON con valori derivati dal dataset:
 etichette, serie, tipo di grafico, campo e misura di origine, filtri, numero di
 record e identificativi dei prodotti. Il modello può proporre il tipo di vista
-o una nuova aggregazione, ma conteggi, percentuali, medie, variazioni e
-confronti sono sempre ricalcolati dal backend. La sezione ``Come è stato
-calcolato'' e la tabella dei dati di ciascun grafico rendono questa provenienza
-ispezionabile; i dati possono inoltre essere esportati in CSV.
+o una nuova aggregazione, mentre conteggi, percentuali, medie, variazioni e
+confronti sono sempre calcolati dal backend. La sezione ``Come è stato
+calcolato'' e la tabella dei dati di ciascun grafico rendono ispezionabile
+questa provenienza; i dati possono inoltre essere esportati in CSV.
 
-La composizione iniziale può limitare gli output richiesti dall'utente: una
-domanda come ``solo la heatmap'' non apre inutilmente grafici e tabella, mentre
-una richiesta generale include KPI, grafici, tabella, sintesi e mappa. Anche in
-assenza di acquisizioni l'artefatto viene mostrato con uno stato vuoto esplicito
-e non con un grafico artificialmente popolato.
+La composizione iniziale segue gli output richiesti: una domanda come ``solo
+la heatmap'' apre soltanto la mappa, mentre una richiesta generale include
+KPI, grafici, tabella, sintesi e mappa. In assenza di acquisizioni l'artefatto
+mostra uno stato vuoto esplicito.
 
 \subsection{Grafici leggibili e senza sovrapposizioni}
 
@@ -306,7 +290,7 @@ Le regole di rendering descritte nella
 Sezione~\ref{subsec:leggibilita-grafici} vengono applicate alla specifica
 generata prima che la dashboard sia mostrata. Il Dashboard Validator riallinea
 etichette, valori e serie e intercetta valori non numerici; ECharts gestisce poi
-dimensioni, etichette e scorrimento nel browser. La verifica del payload rimane
+dimensioni, etichette e scorrimento nel browser. La verifica dei dati resta
 così separata dalle correzioni puramente grafiche.
 
 \subsection{Interazione, revisioni e chat contestuale}
@@ -317,59 +301,57 @@ attivare un cross-filter: il backend applica il filtro ai record e ricalcola
 simultaneamente KPI, grafici, tabella e heatmap. I filtri attivi sono mostrati
 e possono essere azzerati con un solo comando.
 
-Ogni modifica passa attraverso azioni tipizzate, validate e persistite. Sono
+Ogni modifica passa attraverso azioni tipizzate, validate e salvate. Sono
 disponibili annullamento, ripristino e confronto tra revisioni. La chat
 contestuale sul risultato ha un thread indipendente per grafico, tabella,
-heatmap o dashboard: risponde sul sottoinsieme corrente e può trasformare
+heatmap o dashboard: risponde sul sottoinsieme corrente e trasforma
 istruzioni come ``filtra solo Sentinel-2A'' o ``cambia questo grafico in
-linee'' in mutazioni. La ricerca web è usata solo quando serve un contesto
-esterno non deducibile dai dati visualizzati. La home del workspace conserva
+linee'' in modifiche dell'artefatto. La ricerca web interviene solo quando
+serve un contesto esterno ai dati visualizzati. La home del workspace conserva
 inoltre l'elenco delle indagini recenti, così da riprendere una sessione senza
 ripetere la domanda iniziale.
 
 \subsection{Heatmap Copernicus}
 
 Leaflet rappresenta una heatmap della densità dei centri delle bounding box
-degli item recuperati e collega il risultato a una vista con i rettangoli
-delle bounding box e i metadati STAC. Non misura copertura areale né intensità del
-fenomeno osservato. Se un cross-filter è attivo, la mappa usa lo stesso
-sottoinsieme di record degli altri componenti.
+degli item recuperati e la collega a una vista con i rettangoli delle bounding
+box e i metadati STAC. La heatmap descrive quindi dove si concentrano le
+acquisizioni, e non la copertura areale o l'intensità del fenomeno. Se un
+cross-filter è attivo, la mappa usa lo stesso sottoinsieme di record degli
+altri componenti.
 
 \begin{figure}[htbp]
 \centering
 \includegraphics[width=0.92\textwidth]{Images/screenshots/ui-workspace-mappa.png}
 \caption{Vista \emph{Mappa}: densità dei centri delle bounding box degli item
-STAC recuperati (non intensità del fenomeno) e chat laterale sul risultato.}
+STAC recuperati e chat laterale sul risultato.}
 \label{fig:ui-workspace-mappa}
 \end{figure}
 
 \section{Streaming della risposta}
 
-Durante l'esecuzione il backend invia aggiornamenti sullo stato dei nodi
+Durante l'esecuzione il backend invia aggiornamenti sullo stato delle fasi
 (interpretazione, routing, recupero delle fonti, composizione). FastAPI
 traduce gli eventi LangGraph in Server-Sent Events nel formato delle chat
-completion OpenAI; il workspace li mostra come avanzamento della richiesta,
-senza esporre il ragionamento interno del modello.
+completion OpenAI; il workspace li mostra come avanzamento della richiesta.
 
-Il testo generato dal Conversation Agent viene post-processato prima della
-consegna definitiva. Tabelle Search/GDACS, fonti e dashboard Copernicus sono
-aggiunti in un ordine stabile. Lo stream pubblica la versione finale, non una
-bozza priva dell'artefatto; al termine viene inviato il marcatore di chiusura.
+Il testo generato dal Conversation Agent viene rifinito prima della consegna:
+tabelle Search/GDACS, fonti e dashboard Copernicus sono aggiunte in un ordine
+stabile. Lo stream pubblica la versione finale completa di artefatto e si
+chiude con un marcatore di fine.
 
 \section{Gestione degli errori}
 
 \subsection{Errore di una sorgente}
 
-Ogni chiamata a una sorgente è racchiusa da un contratto di errore. Se GDACS
-non risponde ma Search e STAC terminano correttamente, il grafo conserva i
-risultati disponibili. Il Conversation Agent può produrre una risposta
-parziale e segnalare con precisione la dipendenza mancante.
+Ogni chiamata a una sorgente segue un contratto di errore comune. Se GDACS
+fallisce mentre Search e STAC terminano correttamente, il grafo conserva i
+risultati disponibili e il Conversation Agent produce una risposta parziale
+che indica con precisione la fonte mancante.
 
 Anche all'interno di STAC una ricerca partizionata può fallire soltanto per
-alcune aree o finestre temporali. I prodotti ottenuti restano utilizzabili, ma
-la limitazione di copertura deve essere propagata nella risposta e
-nell'artefatto. Una tabella non vuota non dimostra che tutte le partizioni
-abbiano risposto né che il catalogo sia stato esplorato completamente.
+alcune aree o finestre temporali. I prodotti ottenuti restano utilizzabili e
+la copertura incompleta viene segnalata nella risposta e nell'artefatto.
 
 Gli errori sono classificati in configurazione, autenticazione, rete, timeout,
 risposta non valida e persistenza. A ciascuno sono associati:
@@ -384,27 +366,25 @@ risposta non valida e persistenza. A ciascuno sono associati:
 
 \subsection{Timeout e retry}
 
-I retry sono applicati soltanto agli errori presumibilmente transitori, come
-timeout, problemi di rete, HTTP 429 e HTTP 5xx; gli altri errori 4xx non
-vengono ripetuti. Anche il modello remoto dispone di timeout,
-backoff e limite di concorrenza, così che i rami paralleli non saturino il
-runner Ollama.
+I retry sono riservati agli errori presumibilmente transitori, come timeout,
+problemi di rete, HTTP 429 e HTTP 5xx. Anche il modello remoto dispone di
+timeout, backoff e limite di concorrenza, così che i rami paralleli restino
+entro la capacità del runner Ollama.
 
 \subsection{Errore della memoria}
 
-Redis è una dipendenza obbligatoria. L'assenza del checkpointer potrebbe far
-apparire valido un follow-up privo del contesto precedente; il progetto
-preferisce quindi non avviarsi in modalità degradata. L'endpoint readiness
-restituisce errore finché memoria e grafo non sono pronti.
+Redis è una dipendenza obbligatoria: senza memoria un follow-up potrebbe
+sembrare valido pur avendo perso il contesto precedente. Per questo il
+servizio si dichiara pronto solo quando memoria e grafo sono disponibili.
 
 \section{Matrice dei percorsi e delle evidenze}
 
 La Tabella~\ref{tab:matrice-percorsi} collega percorsi tipici alle fonti
-previste. La Tabella~\ref{tab:funzionalita-evidenza} precisa, per le
-funzionalità descritte nel capitolo, quale tipo di evidenza è disponibile:
-molte capacità del prodotto (GDACS, CEMS, follow-up, autenticazione, ripresa
-sessione) non sono misurate dal benchmark del Capitolo~\ref{cap:7}, limitato a
-casi \texttt{graph} e \texttt{acquisitions}.
+previste. La Tabella~\ref{tab:funzionalita-evidenza} indica, per le
+funzionalità descritte nel capitolo, il tipo di evidenza disponibile: il
+benchmark del Capitolo~\ref{cap:7} copre i casi di ricerca nel grafo e di
+acquisizioni, mentre GDACS, CEMS, follow-up, autenticazione e ripresa della
+sessione sono documentati da test e scenari.
 
 \begin{table}[htbp]
 \centering
@@ -418,7 +398,7 @@ Richiesta & Rami principali & Risultato atteso \\
 \midrule
 Clima in Sicilia &
 Piano operativo &
-Contesto web e acquisizioni secondo il piano; nessuna stima climatica dai raster. \\
+Contesto web e acquisizioni secondo il piano, senza stime climatiche dai raster. \\
 \addlinespace
 Dataset orario SST del Mar Nero &
 Discovery su NebulaGraph &
@@ -438,7 +418,7 @@ Attivazione e prodotti; arricchimento dashboard se abilitato. \\
 \addlinespace
 Grafico dei risultati &
 Chart su contesto &
-Nuova vista senza recuperare nuovamente i dati. \\
+Nuova vista sui dati già recuperati. \\
 \addlinespace
 Aggiornamento GDACS &
 Refresh GDACS &
@@ -484,8 +464,7 @@ Osservabilità & Metriche & Overlay & No & Grafana \\
 \end{tabularx}
 \caption{Funzionalità descritte e tipo di evidenza disponibile. ``Benchmark''
 si riferisce al protocollo~6.0 del Capitolo~\ref{cap:7}; ``Browser'' indica
-il tipo di schermata illustrativa disponibile e non certifica un collaudo
-end-to-end dell'interfaccia.}
+il tipo di schermata illustrativa disponibile.}
 \label{tab:funzionalita-evidenza}
 \end{table}
 
@@ -497,19 +476,20 @@ La verifica è organizzata per livelli.
 
 I test unitari controllano normalizzazione dei feed GDACS, sicurezza degli URL,
 query STAC, generazione di grafici, contratti di errore e trasformazioni
-temporali. Per la dashboard verificano inoltre la riparazione di valori e serie
-non validi, il ricalcolo del cross-filter su grafici, KPI, tabella e heatmap, e
-la provenienza delle metriche generate. Queste prove non richiedono una risposta
-creativa dell'LLM e confrontano input e output deterministici.
+temporali. Per la dashboard verificano inoltre la correzione di valori e serie
+anomali, il ricalcolo del cross-filter su grafici, KPI, tabella e heatmap, e
+la provenienza delle metriche generate. Si tratta di prove deterministiche,
+che confrontano input e output noti indipendentemente dal modello linguistico.
 
 \subsection{Test del workflow}
 
-I test del grafo sostituiscono le dipendenze remote con mock e verificano:
+I test del grafo sostituiscono le dipendenze remote con simulazioni (mock) e
+verificano:
 
 \begin{itemize}
     \item selezione delle sorgenti e parallelismo condizionale;
     \item convergenza dei risultati nel Conversation Agent;
-    \item separazione della memoria per \texttt{thread\_id};
+    \item separazione della memoria tra conversazioni;
     \item chiarimenti su richieste incomplete;
     \item follow-up dal contesto e aggiornamenti selettivi;
     \item propagazione della risposta finale nello streaming.
@@ -518,42 +498,37 @@ I test del grafo sostituiscono le dipendenze remote con mock e verificano:
 \subsection{Test delle integrazioni}
 
 I client MCP e Copernicus sono verificati rispetto a timeout, errori HTTP,
-payload non validi e tentativi limitati. I test dell'integrazione della
-dashboard coprono le chiamate HTTP per chat, mutazioni, annullamento, versioni e
-confronto; quelli degli asset statici verificano i controlli richiudibili e i
-collegamenti agli endpoint nativi.
+risposte malformate e tentativi limitati. I test della dashboard coprono le
+chiamate per chat, modifiche, annullamento, versioni e confronto, oltre ai
+controlli dell'interfaccia.
 
 Al 15 ottobre 2026 risultavano superati, fra gli altri, 103 test del modulo di
 valutazione e 32 test del pacchetto di osservabilità \cite{guidaProgetto2026}.
-Poiché molte prove usano dipendenze simulate, non dimostrano da sole il
-corretto funzionamento delle sorgenti live. Il benchmark del
-Capitolo~\ref{cap:7} aggiunge una misura del workflow su domande di riferimento;
-la verifica dell'interfaccia renderizzata resta un livello separato.
+Poiché molte prove usano dipendenze simulate, esse verificano la logica del
+sistema e lasciano alle sorgenti live il compito di confermarne il
+comportamento reale. Il benchmark del Capitolo~\ref{cap:7} aggiunge una misura
+del workflow su domande di riferimento; la verifica dell'interfaccia
+renderizzata costituisce un livello separato.
 
 \section{Limiti attuali}
 
-L'architettura riduce alcuni rischi, ma non elimina i limiti delle fonti e dei
+L'architettura riduce alcuni rischi, mentre altri dipendono dalle fonti e dai
 modelli:
 
 \begin{itemize}
     \item GDACS contiene stime che possono essere aggiornate;
-    \item la presenza di una acquisizione STAC non implica che l'immagine sia
-    adatta a valutare un danno;
+    \item una acquisizione STAC disponibile può essere poco adatta a valutare
+    un danno;
     \item il geocoding può essere ambiguo;
-    \item l'LLM può scegliere una formulazione imprecisa, anche se i dati sono
+    \item l'LLM può scegliere una formulazione imprecisa, anche con dati
     strutturati;
-    \item ricerca web e servizi remoti dipendono dalla rete;
-    \item la qualità della risposta non è misurata soltanto dal superamento
-    dei test software.
+    \item ricerca web e servizi remoti dipendono dalla rete.
 \end{itemize}
 
 Il protocollo implementato aggiunge domande con riferimenti, controlli di
-instradamento e filtri, voti di qualità e statistiche per categoria. Le metriche
-operative permettono inoltre di localizzare latenze e guasti. Queste evidenze
-sostengono conclusioni circoscritte al benchmark e ai percorsi osservati; non
-dimostrano ancora il vantaggio quantitativo del parallelismo o del riuso della
-memoria, per i quali servono confronti controllati.
-
-Restano utili prove conversazionali con controllo del risultato visualizzato.
-La qualità in un impiego reale non può essere dedotta dal solo superamento dei
-test software o dall'assenza di errori tecnici.
+instradamento e filtri, voti di qualità e statistiche per categoria; le
+metriche operative permettono di localizzare latenze e guasti. Queste evidenze
+sostengono conclusioni circoscritte al benchmark e ai percorsi osservati. Il
+vantaggio quantitativo del parallelismo e del riuso della memoria richiede
+confronti controllati, e la qualità in un impiego reale va valutata con prove
+conversazionali che controllino anche il risultato visualizzato.

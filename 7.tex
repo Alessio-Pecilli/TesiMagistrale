@@ -1,152 +1,120 @@
-La verifica dei contratti software non esaurisce la valutazione di un agente.
-Un workflow può rispettare gli schemi e produrre una risposta scorrevole usando
-un luogo o un periodo sbagliato. Il progetto adotta quindi un benchmark
-ancorato a evidenze, controlli deterministici e un LLM-as-a-Judge. Questo
-capitolo descrive il \textbf{protocollo~6.0} implementato in
-\path{backend/app/evals/} (versione dichiarata in
-\path{dataset/schema.py}) e ne riporta i risultati \cite{riscontroTecnico2026}.
-In chiusura si richiamano, per confronto storico, le run con protocollo~4.0
-\cite{guidaProgetto2026}, che non sono sommabili alle attuali perché
-differiscono per protocollo, dataset e regole di esito.
+Valutare un agente significa controllare anche che cosa ha cercato, oltre alla
+forma delle sue risposte: un workflow può rispettare gli schemi e produrre un
+testo scorrevole riferito al luogo o al periodo sbagliato. Il progetto combina
+quindi un benchmark ancorato a evidenze, controlli deterministici e un
+LLM-as-a-Judge. Questo capitolo descrive il \textbf{protocollo~6.0} e ne riporta
+i risultati \cite{riscontroTecnico2026}. In chiusura si richiamano, come
+riferimento storico, le run con protocollo~4.0 \cite{guidaProgetto2026}, che
+seguono regole e dataset diversi.
 
 \begin{figure}[htbp]
 \centering
 \includegraphics[width=0.88\textwidth]{Images/screenshots/ui-evals-panel.png}
 \caption{Schermata illustrativa del pannello di valutazione: dataset, Judge,
-controlli e sintesi per categoria. La run mostrata nell'interfaccia non è una
-prova dei conteggi della Tabella~\ref{tab:risultati-6}.}
+controlli e sintesi per categoria. I conteggi ufficiali sono quelli della
+Tabella~\ref{tab:risultati-6}.}
 \label{fig:ui-evals-panel}
 \end{figure}
 
 \section{Oggetto e perimetro della valutazione}
 
-Il sistema sotto esame è il \texttt{WorkflowAgent}, comprendente instradamento,
-interpretazione, recupero e sintesi. Il runner gli sottopone la domanda
-originale; il Judge valuta risposta ed evidenze osservate. Nella configurazione
-documentata, il modello dell'agente è \texttt{qwen3:8b} e il Judge predefinito è
-\texttt{gemma3:27b}. La famiglia diversa riduce una possibile fonte di
-preferenza per le proprie risposte, senza garantire imparzialità.
+Il sistema sotto esame è il \texttt{WorkflowAgent} nel suo insieme:
+instradamento, interpretazione, recupero e sintesi. Ogni caso del benchmark gli
+sottopone la domanda originale; il Judge valuta poi la risposta e le evidenze
+osservate. Nella configurazione documentata l'agente usa \texttt{qwen3:8b} e il
+Judge \texttt{gemma3:27b}: impiegare una famiglia di modelli diversa riduce la
+tendenza di un modello a premiare risposte simili alle proprie.
 
-Il Judge non è un modello addestrato nel repository per assegnare voti: viene
-interrogato con rubriche e output JSON vincolato. È distinto dal nodo
-Verification dell'agente, che appartiene al percorso di esecuzione. La
-valutazione a posteriori su casi noti non va confusa con un controllo interno
-al singolo turno.
+Il Judge è un modello linguistico generico, interrogato con rubriche esplicite
+e con un formato di risposta strutturato. Opera a posteriori su casi di cui è
+nota la risposta attesa, ed è quindi distinto dal nodo Verification, che
+controlla l'agente durante il singolo turno.
 
-Opzionalmente, il protocollo~6.0 può registrare una validazione della
-\emph{comprensione} prima del router, tramite il campo
-\texttt{validation\_mode}
-con le modalità \texttt{none}, \texttt{self\_report},
-\texttt{verifier} o \texttt{stage\_checks}.
-L'esito pass/fail del caso resta quello della run ordinaria; le modalità di
-comprensione sono uno strato aggiuntivo e non sostituiscono i voti del Judge.
-
-La letteratura evidenzia che i giudizi LLM possono risentire di posizione,
-verbosità e preferenza per le proprie famiglie di modelli
-\cite{zhengJudge2023}: i voti del Judge vanno quindi letti insieme ai controlli
-deterministici e alle misure di incertezza del protocollo. Inoltre il Judge
-riceve già l'esito di quei controlli: il voto è \emph{informato} dai fatti
-verificati e non costituisce una conferma indipendente degli stessi. Non è
-disponibile, in questa tesi, una validazione umana stratificata dei voti sul
-compito geospaziale; eventuali falsi pass/fail del Judge restano quindi una
-minaccia aperta alla validità.
+La letteratura documenta che i giudizi di un LLM possono risentire di
+posizione, lunghezza della risposta e affinità fra modelli
+\cite{zhengJudge2023}. Per questo il protocollo legge i voti del Judge insieme
+ai controlli deterministici e alle misure di incertezza descritte più avanti.
 
 \section{Dataset ed evidenze di riferimento}
 
 \subsection{Composizione dei casi}
 
-Il dataset corrente \path{backend/app/evals/dataset/benchmark_questions.json}
-contiene \textbf{105 casi}: 51 di categoria \texttt{graph} e 54 di categoria
-\texttt{acquisitions}, organizzati rispettivamente in 19 e 17 famiglie
-(\texttt{cluster}). Ogni caso conserva domanda, risposta attesa, strumenti
-attesi, evidenze, tag e famiglia di scenari.
+Il dataset corrente contiene \textbf{105 casi}: 51 sul catalogo a grafo e 54
+sulle acquisizioni satellitari, raggruppati rispettivamente in 19 e 17
+famiglie di scenari. Ogni caso conserva domanda, risposta attesa, strumenti
+attesi, evidenze e famiglia di appartenenza.
 
-I casi del grafo coprono Marine, Drought e CDSE/STAC catalogati in NebulaGraph.
-Le acquisizioni usano collezioni Sentinel-2 L1C/L2A e Sentinel-1 GRD/SLC; alcuni
-casi prevedono un risultato vuoto: cercare correttamente e dichiarare l'assenza
-di prodotti può costituire un successo. Esiste inoltre un set perturbato
-\path{benchmark_perturbed.json}, riservato a prove di generalizzazione e non
-usato per tarare le regole.
+I casi del grafo riguardano risorse Marine, Drought e CDSE/STAC catalogate in
+NebulaGraph. Le acquisizioni usano le collezioni Sentinel-2 L1C/L2A e
+Sentinel-1 GRD/SLC; alcuni casi prevedono un risultato vuoto, perché anche
+cercare correttamente e dichiarare l'assenza di prodotti è un comportamento
+corretto. Un set di domande perturbate è riservato a future prove di
+generalizzazione.
 
-Questa stratificazione amplia la varietà linguistica ma non rende indipendenti
-le parafrasi. Domande sullo stesso luogo possono condividere il medesimo errore
-di geocodifica. La numerosità dei casi deve quindi essere accompagnata da
-quella delle famiglie effettivamente osservate.
+Le famiglie raccolgono parafrasi dello stesso scenario: ampliano la varietà
+linguistica, ma domande sullo stesso luogo tendono a condividere gli stessi
+errori. Per questo i risultati vanno letti tenendo conto sia del numero di casi
+sia del numero di famiglie.
 
 \subsection{Costruzione della ground truth}
 
-Per il grafo, il generatore verifica che titolo, tipo, area, risoluzione e
-variabili dichiarati nella domanda siano sostenuti dai metadati della risorsa.
-I riscontri sono conservati in \texttt{evidence.grounding}. Un vincolo non
-supportato impedisce di trattare il caso come riferimento valido.
+Per il grafo, ogni vincolo citato nella domanda (titolo, tipo, area,
+risoluzione, variabili) viene verificato sui metadati della risorsa; solo i
+casi pienamente supportati diventano riferimenti validi.
 
-Per STAC, il riferimento comprende query con bbox, periodo e collection,
-item osservati e identificativi. I \texttt{core\_ids} individuano i prodotti
-che coprono il centro del luogo secondo il criterio del benchmark. La loro
-copertura misura il recupero di questo insieme di riferimento, senza provare
-che sia stato recuperato ogni prodotto esistente nel catalogo.
+Per le acquisizioni, il riferimento comprende la ricerca attesa (area, periodo,
+collezione) e i prodotti osservati. Un sottoinsieme di questi, i prodotti che
+coprono il centro del luogo richiesto (\emph{core\_ids}), serve da insieme di
+riferimento per misurare il recupero.
 
-I riferimenti sono snapshot di metadati. Non includono download di raster o
-misure scientifiche sulle variabili. Il catalogo remoto può cambiare: una
-differenza di ID rispetto allo snapshot non equivale da sola a un errore
-dell'agente e va interpretata insieme alla query e ai prodotti osservati.
+I riferimenti sono istantanee dei metadati del catalogo. Poiché il catalogo
+remoto evolve, una differenza negli identificativi va interpretata alla luce
+della ricerca effettuata e dei prodotti restituiti.
 
 \section{Esecuzione del vero workflow}
 
-Il runner invoca \texttt{WorkflowAgent.run\_detailed()} con la domanda originale
-e un thread nuovo per ogni caso. Per le acquisizioni richiede
-\texttt{include\_eval\_trace=True}, ottenendo interpretazione, query effettiva
-e prodotti. L'agente non riceve bbox, sensore o intervallo già risolti dal
-riferimento: sostituire il workflow con una chiamata diretta STAC misurerebbe
-soltanto il client, lasciando fuori comprensione e routing.
+Ogni caso esegue l'agente reale, con la sola domanda e una conversazione nuova.
+L'agente deve ricavare da sé area, sensore e periodo: in questo modo il
+benchmark misura anche comprensione e instradamento, oltre al client di
+ricerca. Per le acquisizioni viene registrata la traccia completa:
+interpretazione, ricerca effettivamente eseguita e prodotti restituiti.
 
-La sequenza comprende esecuzione dell'agente, controlli deterministici,
-giudizio, verifica della coerenza dei voti, decisione e salvataggio del JSON
-della run. \texttt{used\_tools} deriva dalle sorgenti osservate nel risultato;
-\texttt{expected\_tools} resta un requisito del caso. Confondere i due campi
-renderebbe invisibile un errore di instradamento.
-
-Il timeout dell'agente è configurabile, con default di 600 secondi. Il campo
-\path{execution_time_ms} comprende anche i passaggi valutativi successivi,
-incluso il Judge: non rappresenta la sola latenza del workflow in Grafana.
-La prova non apre il browser; non certifica quindi la corrispondenza fra
-artefatto e tabella o mappa effettivamente visualizzate.
-
-I moduli principali sono \path{runner/engine.py}, \path{runner/checks.py},
-\path{judge/prompts.py}, \path{judge/evaluator.py} e \path{stats/metrics.py},
-relativi a \path{backend/app/evals/}. Run di protocolli precedenti (4.0/5.0)
-non vanno mescolate con le sintesi 6.0 senza dichiarare la versione.
+Per ogni caso la sequenza comprende esecuzione dell'agente, controlli
+deterministici, giudizio, verifica della coerenza dei voti, decisione finale e
+salvataggio della run. Gli strumenti effettivamente usati sono ricavati da ciò
+che l'agente ha prodotto e confrontati con quelli attesi dal caso, così che un
+errore di instradamento emerga in modo esplicito. Ogni caso ha un tempo massimo
+configurabile, di 600 secondi per default.
 
 \section{Controlli deterministici e rubriche ordinali}
 
 \subsection{Controlli sui fatti osservati}
 
-I controlli producono esiti vero, falso o non applicabile e una gravità
+Ogni controllo produce un esito (vero, falso o non applicabile) e una gravità:
 \texttt{critical}, \texttt{major}, \texttt{minor} o \texttt{info}. Un
-fallimento critico impone l'esito negativo. Gli altri sono mostrati al Judge e
-riportati nel risultato, ma non sono tutti automaticamente bloccanti.
+fallimento critico determina l'esito negativo del caso; gli altri vengono
+riportati nel risultato e mostrati al Judge come segnali di qualità.
 
-Per il grafo si verifica che il percorso sia Discovery, senza sostituzione con
-web, GDACS, MCP o STAC operativo. Vengono misurati recupero, posizione e
-citazione della risorsa di riferimento, oltre ai campi richiesti. La mancata
-citazione di un target univoco è critica.
+Per il grafo si verifica che l'agente segua il percorso Discovery e si
+misurano recupero, posizione e citazione della risorsa di riferimento, oltre
+alla presenza dei campi richiesti. Quando la domanda ha un unico target, citarlo
+è un requisito critico.
 
-Per le acquisizioni, nel protocollo~6.0 sono critici, fra gli altri: percorso
-STAC corretto; luogo, periodo e sensore della query; filtri richiesti sulla
-selezione della dashboard; selezione coerente (senza filtri non richiesti
-aggiunti dall'agente); risposta live da CDSE (un artefatto in cache dopo una
-risposta vuota è errore); assenza di identificativi inventati. Controlli
-maggiori riguardano, per esempio, la quota di prodotti sul luogo e la coerenza
-della sintesi con i prodotti selezionati.
+Per le acquisizioni sono critici, fra gli altri: il percorso STAC; luogo,
+periodo e sensore della ricerca; i filtri richiesti dall'utente, applicati
+senza aggiungerne altri; una risposta ottenuta in tempo reale da CDSE;
+l'uso esclusivo di identificativi realmente restituiti. Controlli di gravità
+\texttt{major} riguardano, per esempio, la quota di prodotti che cadono sul
+luogo e la coerenza della sintesi con i prodotti selezionati.
 
-Se una query corretta incontra un guasto della sorgente, il caso può essere non
-valutabile. Un luogo o periodo già errati non vengono invece giustificati dal
-guasto successivo.
+Quando una ricerca corretta incontra un guasto della sorgente esterna, il caso
+è classificato come non valutabile; un luogo o un periodo errati restano
+invece un fallimento dell'agente.
 
 \subsection{Dimensioni e soglie}
 
-I voti sono interi da 1 a 5 con ancore esplicite per ogni livello. Le rubriche
-del protocollo~6.0 differiscono per categoria, come mostra la
+I voti sono interi da 1 a 5, con una descrizione esplicita di ogni livello. Le
+rubriche del protocollo~6.0 differiscono per categoria, come mostra la
 Tabella~\ref{tab:rubriche-judge}.
 
 \begin{table}[htbp]
@@ -162,7 +130,7 @@ Categoria & Dimensione & Oggetto del giudizio & Soglia \\
 Grafo & correctness & Correttezza della risorsa e dei vincoli. & 4 \\
  & completeness & Presenza degli elementi richiesti. & 4 \\
  & relevance & Focalizzazione e pertinenza. & 3 \\
- & faithfulness & Assenza di affermazioni false rispetto allo strumento. & 4 \\
+ & faithfulness & Aderenza all'output dello strumento. & 4 \\
 \midrule
 Acquisizioni & intent & Sensore/prodotto e filtri richiesti. & 4 \\
  & place & Luogo effettivamente interrogato. & 4 \\
@@ -175,136 +143,122 @@ critici si applicano indipendentemente dai voti.}
 \label{tab:rubriche-judge}
 \end{table}
 
-Per le acquisizioni, ogni errore sostanziale è attribuito a una sola dimensione
+Per le acquisizioni ogni errore sostanziale è attribuito a una sola dimensione
 (per esempio area troppo ampia $\rightarrow$ \texttt{place}; filtri sbagliati
-$\rightarrow$ \texttt{intent}). \texttt{faithfulness} sul grafo misura solo
-l'assenza di affermazioni false rispetto all'output dello strumento: una
-risposta ``non ho trovato nulla'', quando lo strumento non ha restituito nulla,
-può essere fedele anche se scorretta rispetto al riferimento.
+$\rightarrow$ \texttt{intent}). Sul grafo, \texttt{faithfulness} misura
+l'aderenza della risposta a ciò che lo strumento ha restituito: dichiarare
+``nessun risultato'' quando lo strumento è vuoto è fedele, anche se scorretto
+rispetto al riferimento.
 
-La media dei quattro voti è un descrittore e non decide l'esito. Una sequenza
-5, 5, 5, 1 ha media 4 ma non supera le soglie.
+Un caso supera la valutazione solo se \emph{ogni} dimensione raggiunge la
+propria soglia; la media dei voti ha valore descrittivo. Una sequenza 5, 5, 5, 1,
+per esempio, ha media 4 ma fallisce.
 
-\subsection{Prompt, parsing e coerenza}
+\subsection{Prompt e coerenza dei voti}
 
-Il Judge riceve domanda, riferimento, risposta, traccia e controlli. Nella
-configurazione ordinaria usa temperatura zero, seed fisso, contesto 16.384 token
-e output JSON vincolato. Se parsing o voti risultano incoerenti con i fatti
-verificati, è previsto un ulteriore tentativo; una contraddizione persistente
-viene marcata per revisione (\texttt{review}).
+Il Judge riceve domanda, riferimento, risposta, traccia e risultati dei
+controlli. Opera con temperatura zero, seed fisso, contesto di 16.384 token e
+risposta in formato strutturato. Se i voti contraddicono i fatti verificati, il
+giudizio viene ripetuto; una contraddizione persistente porta il caso nello
+stato \texttt{review}.
 
 \section{Stati finali e denominatori}
 
-Il protocollo distingue cinque stati:
+Ogni caso termina in uno di cinque stati:
 \begin{description}
     \item[\texttt{pass}] controlli critici rispettati e soglie superate;
     \item[\texttt{fail}] fallimento critico o almeno un voto insufficiente;
-    \item[\texttt{review}] incoerenza residua dei voti che richiede esame;
-    \item[\texttt{not\_evaluable}] evidenza non utilizzabile, guasto esterno su
+    \item[\texttt{review}] incoerenza residua dei voti, da esaminare a mano;
+    \item[\texttt{not\_evaluable}] evidenza inutilizzabile, guasto esterno su
     richiesta corretta o valutatore inutilizzabile;
     \item[\texttt{error}] errore, timeout o assenza di risposta dell'agente.
 \end{description}
 
-Indicando con $P,F,R,U,E$ i conteggi dei cinque stati, i due tassi sono:
+Il protocollo calcola due tassi di successo. Il \emph{primario} considera solo i
+casi con esito netto (pass o fail); il \emph{rigoroso} mette al denominatore
+tutti i casi, contando come insuccesso ogni stato diverso da pass. Indicando con
+$P,F,R,U,E$ i conteggi dei cinque stati:
 \begin{equation}
  p_{\mathrm{primario}}=\frac{P}{P+F}, \qquad
  p_{\mathrm{rigoroso}}=\frac{P}{P+F+R+U+E}.
 \label{eq:tassi-judge}
 \end{equation}
-Il primo riguarda i casi con esito pass/fail; il secondo include tutti i casi
-completati in modo conservativo. Se non esistono casi valutabili, il tasso
-primario è assente. In caso di interruzione vengono salvati i casi completati
-con \texttt{partial=true}. Le sintesi di grafo e acquisizioni restano separate.
+Se una run si interrompe, i casi completati vengono comunque salvati e la run
+è marcata come parziale. Grafo e acquisizioni sono sempre riportati
+separatamente.
 
 \section{Incertezza e misure di recupero}
 
 \subsection{Intervallo di Wilson}
 
-Per $n=P+F>0$ casi valutabili e proporzione osservata $\hat p=P/n$,
-l'intervallo di Wilson al 95\% usa $z\simeq1{,}96$:
+Su un numero limitato di casi, una percentuale osservata è una stima. Per
+indicarne l'incertezza il protocollo usa l'intervallo di Wilson al 95\%, adatto
+anche a proporzioni vicine a 0 o a 1. Con $n=P+F>0$ casi valutabili,
+proporzione osservata $\hat p=P/n$ e $z\simeq1{,}96$:
 \begin{equation}
  \frac{\hat p+z^2/(2n)\ \pm\
  z\sqrt{\hat p(1-\hat p)/n+z^2/(4n^2)}}{1+z^2/n}.
 \label{eq:wilson}
 \end{equation}
-La procedura è disponibile anche nelle librerie statistiche di riferimento
-\cite{statsmodelsWilson}. Wilson tratta i casi come osservazioni indipendenti
-Bernoulli: non incorpora la dipendenza fra parafrasi della stessa famiglia.
-Affiancarlo al bootstrap non ``risolve'' quella dipendenza; i due intervalli
-rispondono a ipotesi diverse. Un campione piccolo non sostiene una stima
-precisa; l'intervallo non è la probabilità che la prossima risposta sia
-corretta.
+La procedura è quella delle librerie statistiche di riferimento
+\cite{statsmodelsWilson}. Wilson tratta ogni caso come un'osservazione
+indipendente.
 
 \subsection{Bootstrap per famiglie e voti ordinali}
 
-Il bootstrap per cluster ricampiona famiglie intere con reinserimento. Si
-conserva così la dipendenza interna alle famiglie. Con 17 famiglie di
-acquisizioni e 19 di grafo, la varietà effettiva degli scenari conta quanto il
-numero di domande. Se tutti i casi passano, il bootstrap può collassare in
-$[100\%,100\%]$: è una degenerazione del campione empirico, non una prova di
-certezza, e va dichiarata affiancando Wilson e numerosità.
+Per tener conto delle parafrasi, il bootstrap per famiglie ricampiona interi
+scenari anziché singole domande, preservando la dipendenza al loro interno. I
+due intervalli rispondono quindi a ipotesi diverse e vengono riportati
+affiancati. Quando tutti i casi passano, il bootstrap si riduce a
+$[100\%,100\%]$, perché il campione contiene solo successi; in quel caso
+l'informazione utile sull'incertezza viene da Wilson e dalla numerosità.
 
-I voti 1--5 sono ordinali. Per ogni dimensione il sistema riporta distribuzione,
-mediana e quartili; l'\texttt{overall\_score} medio non sostituisce i singoli
-voti né le regole di esito.
+I voti da 1 a 5 sono ordinali: per ogni dimensione il sistema riporta
+distribuzione, mediana e quartili.
 
 \subsection{Indicatori indipendenti dai voti}
 
-Per il grafo si misurano hit, hit@1, citazione e MRR rispetto alla risorsa di
-riferimento. Per le acquisizioni si misurano copertura dei \texttt{core\_ids} e
-indicatori di recupero sul luogo. Questi indicatori dipendono dalla scelta del
-riferimento e non misurano tutta la disponibilità globale del catalogo.
-
-Per interpretare gli indicatori del grafo, si considerino $N>0$ casi e la
-posizione $r_i$ del primo risultato pertinente nel caso $i$. Se il riferimento
-non è recuperato, si pone $r_i=\infty$ e si assume $1/r_i=0$. Con
-$\mathbf{1}[\cdot]$ funzione indicatrice, le definizioni usuali sono:
+Accanto ai voti, il protocollo misura direttamente la qualità del recupero.
+Per il grafo conta se la risorsa di riferimento compare fra i risultati
+(\emph{hit}), se compare per prima (\emph{hit@1}) e quanto in alto si trova in
+media (\emph{MRR}, mean reciprocal rank). Indicando con $r_i$ la posizione del
+riferimento nel caso $i$ su $N$ casi, con $1/r_i=0$ quando il riferimento manca
+e con $\mathbf{1}[\cdot]$ la funzione indicatrice:
 \[
  \mathrm{hit}=\frac{1}{N}\sum_i\mathbf{1}[r_i<\infty],\qquad
  \mathrm{hit@1}=\frac{1}{N}\sum_i\mathbf{1}[r_i=1],\qquad
  \mathrm{MRR}=\frac{1}{N}\sum_i\frac{1}{r_i}.
 \]
-La citazione misura separatamente se il riferimento compare nella risposta
-finale: presenza nella lista recuperata e menzione nella sintesi non sono
-la stessa proprietà. Per le acquisizioni, il richiamo sul riferimento è
-il rapporto tra \texttt{core\_ids} recuperati e \texttt{core\_ids} attesi,
-quando l'insieme atteso non è vuoto. La quota sul luogo usa invece al
-denominatore i prodotti recuperati. Con insiemi vuoti la convenzione deve
-essere dichiarata; una media dei rapporti per caso e un rapporto dei totali
-non sono intercambiabili. Nel riepilogo corrente i tre casi STAC con riferimento vuoto sono esclusi
-dalle metriche di recupero, ma inclusi nella classificazione degli esiti.
+Un indicatore separato, la citazione, registra se il riferimento compare anche
+nella risposta finale.
+
+Per le acquisizioni si misura il richiamo, cioè la frazione dei \emph{core\_ids}
+attesi effettivamente recuperati, e la quota dei prodotti recuperati che cade
+sul luogo richiesto. I tre casi STAC con riferimento vuoto entrano nella
+classificazione degli esiti e sono esclusi dalle metriche di recupero.
 
 \section{Confronti e ripetizioni}
 
 \subsection{Riproducibilità e stabilità}
 
-Il campionamento è mescolato con seed. Con una sola ripetizione del Judge la
-temperatura è 0; con più ripetizioni (studio di stabilità) è 0,3 e si aggrega
-con la mediana per dimensione. Le run registrano protocollo, hash del dataset,
-modello Judge, temperatura, seed e numero di ripetizioni, ma non da sole
-commit, digest immutabile del modello e stato completo delle sorgenti.
+L'ordine dei casi dipende da un seed. Con una sola ripetizione il Judge opera a
+temperatura 0; negli studi di stabilità, con più ripetizioni, usa temperatura
+0,3 e aggrega i voti con la mediana. Ogni run registra protocollo, impronta del
+dataset, modello Judge, temperatura, seed e numero di ripetizioni.
 
 \subsection{Confronti appaiati fra run}
 
-Il confronto ammette run dello \emph{stesso} protocollo, stesso Judge e almeno
-20 coppie valutabili per categoria, verificando domanda, evidenza e risposta
-attesa dei casi comuni. Wilcoxon signed-rank e McNemar (con correzione di Holm
-sulle dimensioni) sono gli strumenti previsti
-\cite{scipyWilcoxon,mcnemar1947,statsmodelsHolm}. La soglia delle 20 coppie non
-elimina la dipendenza fra famiglie di scenari. Wilcoxon richiede inoltre
-ipotesi sulla distribuzione delle differenze, inclusa la simmetria sotto
-l'ipotesi nulla, e attenzione a pareggi e zeri, frequenti nei voti 1--5.
-Il suo uso sui voti presuppone che le differenze numeriche siano
-interpretabili: la sola natura ordinale non garantisce questa proprietà.
-Per McNemar vanno considerate le coppie discordanti dell'esito binario.
-La famiglia di ipotesi alla quale applicare Holm deve essere dichiarata e
-non coincide con le famiglie di parafrasi del dataset. Prima di attribuire
-un cambiamento a una modifica è utile un confronto A/A della stessa versione.
+Due run possono essere confrontate caso per caso quando condividono protocollo,
+Judge e almeno 20 coppie valutabili per categoria. Il protocollo prevede il
+test di Wilcoxon sui voti e quello di McNemar sugli esiti, con correzione di
+Holm per i confronti multipli \cite{scipyWilcoxon,mcnemar1947,statsmodelsHolm}.
+Prima di attribuire una differenza a una modifica del sistema, è buona pratica
+confrontare due run della stessa versione (confronto A/A).
 
-\section{Risultati riportati e provenienza}
+\section{Risultati}
 \label{sec:risultati-judge}
 
-\subsection{Riepilogo riportato per il protocollo~6.0}
+\subsection{Riepilogo del protocollo~6.0}
 
 Sul dataset da 105 casi, la run \texttt{eval-run-ca004ba5} (protocollo~6.0,
 agente \texttt{qwen3:8b}, Judge \texttt{gemma3:27b}, temperatura zero, seed 40)
@@ -328,69 +282,80 @@ Acquisizioni & 54/54 (100\%) & 54/54 (100\%) & 93,4--100\% & 100--100\% \\
 \bottomrule
 \end{tabularx}
 \caption{Conteggi della run \texttt{eval-run-ca004ba5}. Il tasso primario esclude i due
-\texttt{review} del grafo; il rigoroso li include nel denominatore. Wilson sui
-casi valutabili non incorpora la dipendenza fra famiglie; il bootstrap al
-100\% sulle acquisizioni è degenerato (nessun fallimento da ricampionare).}
+casi \texttt{review} del grafo, il rigoroso li include. Per le acquisizioni
+il bootstrap collassa a 100\% perché il campione contiene solo successi.}
 \label{tab:risultati-6}
 \end{table}
 
-La differenza tra i due tassi del grafo dipende dai due casi indicati come
-\texttt{review}: il primario esclude questi casi, il rigoroso li include.
+La differenza fra i due tassi del grafo è dovuta interamente ai due casi in
+\texttt{review}.
 
-Una seconda run completa con protocollo~6.0, sullo stesso dataset e senza
-strato di validazione, ma con seed 42 (\texttt{721bec34}), ottiene 61,2\% sul grafo e 98,1\% sulle
-acquisizioni \cite{riscontroTecnico2026}. Le due run sono vicine e indicano
-una variabilità di qualche punto percentuale fra esecuzioni; due sole
-ripetizioni non bastano però a stimarla con precisione.
+Una seconda run completa con protocollo~6.0 sullo stesso dataset, con seed 42
+(\texttt{721bec34}), ottiene 61,2\% sul grafo e 98,1\% sulle acquisizioni
+\cite{riscontroTecnico2026}. I risultati delle due run sono vicini e indicano
+una variabilità dell'ordine di pochi punti percentuali.
 
 I 18 fallimenti del grafo si distribuiscono così: otto con riferimento assente
 dalla lista, quattro con errore di percorso e mancato recupero, quattro con
 riferimento citato ma voti insufficienti e due con lista vuota. I due casi
-\texttt{review} restano separati dai fallimenti.
+\texttt{review} sono conteggiati a parte.
 Sui 49 casi valutabili, hit e citazione raggiungono il 71,4\%, hit@1 il
 18,4\% e MRR 0,295. Per le acquisizioni, esclusi i tre casi con riferimento
-vuoto, il recupero completo dei \texttt{core\_ids} è 94,1\% su 51 casi e il
+vuoto, il recupero completo dei \emph{core\_ids} è 94,1\% su 51 casi e il
 richiamo medio è 97,4\% \cite{riscontroTecnico2026}.
 
 Le cifre indicano dove intervenire. Sul grafo il riferimento è spesso
 recuperato (hit 71,4\%) ma raramente in prima posizione (hit@1 18,4\%): il
-limite principale è l'ordinamento, non il recupero. Sulle acquisizioni,
-invece, il 100\% segnala un effetto soffitto: il benchmark corrente non è
-abbastanza difficile da distinguere una versione migliore da una peggiore e
-andrebbe esteso con casi più ambigui (luoghi omonimi, periodi relativi,
+punto debole è l'ordinamento dei risultati, più che il recupero. Sulle
+acquisizioni, invece, il 100\% segnala un effetto soffitto: il benchmark
+corrente è troppo facile per distinguere una versione migliore da una peggiore
+e andrebbe esteso con casi più ambigui (luoghi omonimi, periodi relativi,
 combinazioni di filtri).
 
-Precisione geografica e richiamo hanno significati diversi: STAC-017 riceve
-un pass pur recuperando tre dei sei prodotti di riferimento, con quota di
-prodotti geograficamente pertinenti pari a 1. L'avviso di qualità
-\texttt{major} non determina da solo un fallimento nel protocollo.
-Un pass del protocollo non dimostra quindi esaustività, e l'assenza di
-fallimenti bloccanti non elimina eventuali avvisi di qualità.
+Precisione geografica e richiamo misurano proprietà diverse. STAC-017, per
+esempio, supera la valutazione recuperando tre dei sei prodotti di
+riferimento, tutti pertinenti al luogo: il controllo sul richiamo segnala un
+avviso \texttt{major}, che il protocollo riporta senza farne un motivo di
+fallimento. Un pass attesta quindi la correttezza della ricerca e della
+sintesi, mentre l'esaustività è descritta dagli indicatori di recupero.
 
 \subsection{Confronto storico con protocollo~4.0}
 
 La guida del 15 ottobre 2026 documenta run con protocollo~4.0 su un dataset da
-115 casi (hash diverso). La più ampia, \texttt{7dc4eda3}, è parziale
+115 casi, diverso dall'attuale. La più ampia, \texttt{7dc4eda3}, è parziale
 (102/115) e riporta 49/51 sul grafo e 32/51 sulle acquisizioni
-\cite{guidaProgetto2026}. Il contrasto con la Tabella~\ref{tab:risultati-6}
-non dimostra da solo un ``peggioramento'' o un ``miglioramento'' del sistema:
-cambiano protocollo, regole critiche, composizione del dataset e completezza
-della run. Serve soltanto a collocare storicamente quelle cifre e a evitare di
-presentarle come risultato del protocollo corrente.
+\cite{guidaProgetto2026}. Poiché protocollo, regole critiche, composizione del
+dataset e completezza della run sono cambiati, queste cifre servono a
+collocare storicamente il lavoro e vanno lette separatamente dalla
+Tabella~\ref{tab:risultati-6}.
 
 \section{Interpretazione e minacce alla validità}
 
-Il contributo valutativo consiste nel rendere ispezionabili domanda, evidenze,
-percorso, controlli e voti, distinguendo fallimenti dell'agente, problemi
-esterni e giudizi inutilizzabili. Wilson e bootstrap descrivono incertezza sotto
-ipotesi dichiarate; non correggono un Judge sistematicamente errato.
-
-La validità interna risente di euristiche dei controlli, riduzione delle
-evidenze e dipendenze fra casi. Inoltre i riferimenti del grafo sono generati
-a partire dallo stesso catalogo NebulaGraph che l'agente interroga: il
-benchmark misura la capacità di trovare risorse presenti nel catalogo, non la
-completezza del catalogo stesso. La validità esterna rimane limitata da domande
-curate, numerosità delle famiglie e snapshot; il set perturbato non è incluso
-nei risultati di questo capitolo. Per rafforzare le conclusioni
-servono confronti A/A, più scenari indipendenti e verifica dell'interfaccia
-del workspace, che il benchmark a thread nuovo non osserva.
+Il contributo del protocollo consiste nel rendere ispezionabili domanda,
+evidenze, percorso, controlli e voti, distinguendo i fallimenti dell'agente dai
+problemi esterni e dai giudizi inutilizzabili. I risultati vanno letti alla
+luce di alcuni limiti, raccolti qui:
+\begin{itemize}
+    \item \emph{Judge.} Manca una validazione umana dei voti sul compito
+    geospaziale, per cui eventuali falsi pass o fail restano possibili. Il
+    Judge riceve inoltre l'esito dei controlli: il suo voto è informato dai
+    fatti verificati e li integra, senza costituirne una conferma
+    indipendente. Wilson e bootstrap descrivono l'incertezza del campione, ma
+    presuppongono un Judge corretto.
+    \item \emph{Ground truth.} I riferimenti del grafo provengono dallo stesso
+    catalogo NebulaGraph interrogato dall'agente: il benchmark misura la
+    capacità di trovare risorse presenti nel catalogo, non la completezza del
+    catalogo stesso. I controlli si basano su euristiche e le parafrasi della
+    stessa famiglia sono dipendenti.
+    \item \emph{Copertura.} Le domande sono curate e le famiglie limitate; il
+    set perturbato è escluso dai risultati di questo capitolo. Due sole run
+    danno un'indicazione, e non una stima precisa, della variabilità.
+    \item \emph{Termini di confronto.} Manca un confronto con un agente singolo
+    privo di workflow, che quantificherebbe il beneficio dell'architettura.
+    \item \emph{Interfaccia.} Il benchmark verifica la risposta dell'agente;
+    la corrispondenza con tabella e mappa effettivamente visualizzate nel
+    browser resta da controllare.
+\end{itemize}
+Per rafforzare le conclusioni servono una validazione umana di un campione di
+voti, confronti A/A, un termine di confronto a singolo agente, più scenari
+indipendenti e test dell'interfaccia del workspace.

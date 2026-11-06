@@ -2,24 +2,24 @@
 
 Il sistema proposto è un assistente conversazionale specializzato in
 geografia, osservazione della Terra ed emergenze naturali, esposto come
-\emph{Copernicus Data Workspace}. Deve interpretare richieste in linguaggio
-naturale, interrogare più fonti, produrre testo e visualizzazioni e mantenere
-il contesto nei turni successivi, anche riprendendo sessioni già avviate.
+\emph{Copernicus Data Workspace}. Interpreta richieste in linguaggio naturale,
+interroga più fonti, produce testo e visualizzazioni e mantiene il contesto nei
+turni successivi, anche riprendendo sessioni già avviate.
 
 I requisiti che guidano l'architettura sono:
 
 \begin{itemize}
     \item autenticare l'accesso al workspace (OIDC) e associare memoria e
-    artefatti a un \texttt{thread\_id} di sessione;
+    artefatti alla sessione di lavoro;
     \item applicare un confine di dominio prima di effettuare chiamate esterne;
     \item selezionare una o più fonti in funzione della richiesta;
-    \item distinguere Discovery sul grafo Nebula, STAC live sul catalogo remoto
-    e, quando serve, il percorso combinato;
+    \item distinguere la Discovery sul catalogo a grafo, la ricerca STAC sul
+    catalogo remoto e, quando serve, il percorso combinato;
     \item eseguire in parallelo i rami operativi indipendenti;
     \item mantenere separati ragionamento, acquisizione dati e presentazione;
     \item conservare memoria e artefatti per follow-up e ripresa sessioni;
     \item presentare le acquisizioni Copernicus in una dashboard interattiva e
-    modificabile senza alterare i dati di origine;
+    modificabile, lasciando intatti i dati di origine;
     \item continuare a fornire un risultato quando una sola sorgente fallisce;
     \item esporre un'API compatibile con OpenAI Chat Completions (SSE), usata
     dal workspace e riutilizzabile da client legacy;
@@ -31,14 +31,14 @@ I requisiti che guidano l'architettura sono:
 \section{Componenti applicativi}
 
 L'accesso alle fonti geospaziali è mediato da un workspace conversazionale e da
-un workflow persistente. I componenti vengono qui raggruppati per funzione,
-mentre le dipendenze e i nodi del grafo sono descritti nelle sezioni seguenti.
+un workflow persistente. I componenti vengono qui raggruppati per funzione;
+le dipendenze e i nodi del grafo sono descritti nelle sezioni seguenti.
 
 \subsection{Interfaccia e API}
 
-L'interfaccia primaria è \emph{Copernicus Data Workspace}, servita dal backend
-su \path{/dashboard}. È uno spazio di lavoro a schermo intero, con home in
-italiano e selettore IT/EN, in cui l'utente:
+L'interfaccia primaria è \emph{Copernicus Data Workspace}, servita direttamente
+dal backend. È uno spazio di lavoro a schermo intero, con home in italiano e
+selettore IT/EN, in cui l'utente:
 
 \begin{itemize}
     \item formula la domanda in linguaggio naturale (Discovery, analisi
@@ -48,18 +48,16 @@ italiano e selettore IT/EN, in cui l'utente:
     \item consulta testo, tabelle e dashboard generate dal workflow.
 \end{itemize}
 
-L'autenticazione è OIDC tramite Keycloak (realm \texttt{pecilli}). Il client
-pubblico usato dal browser è \texttt{dashboard-client}. I ruoli distinguono
-almeno un profilo amministratore, con accesso anche agli strumenti di
-valutazione, e un profilo utente standard.
+L'autenticazione avviene tramite Keycloak (OIDC). I ruoli distinguono almeno un
+profilo amministratore, con accesso anche agli strumenti di valutazione, e un
+profilo utente standard.
 
-Open WebUI resta disponibile soltanto come client legacy opzionale (profilo
-Compose \texttt{legacy-ui}): una Pipe può inoltrare la chat al backend nel
-formato delle completion OpenAI, ma non è richiesta dal percorso standard
-\cite{openWebuiDocs}. Il viewer cartografico STAC (\path{/copernicus}) resta
-disponibile come vista dedicata, distinta dalla dashboard analitica.
+Open WebUI resta disponibile come client legacy opzionale: inoltra la chat al
+backend nel formato delle completion OpenAI \cite{openWebuiDocs}. Un viewer
+cartografico STAC completa l'offerta come vista dedicata, distinta dalla
+dashboard analitica.
 
-FastAPI espone l'endpoint di chat, le API degli artefatti (lettura, mutazioni,
+FastAPI espone l'endpoint di chat, le API degli artefatti (lettura, modifiche,
 revisioni, chat contestuale) e lo streaming SSE. I modelli Pydantic validano
 richieste, decisioni degli agenti e risultati normalizzati prima che passino al
 nodo successivo \cite{fastapiDocs}. Il formato HTTP resta così separato dalla
@@ -78,38 +76,34 @@ servizio autenticato con Keycloak.}
 
 LangChain gestisce messaggi, invocazioni e output strutturati del modello
 \cite{langchainDocs}; LangGraph dispone le operazioni in un grafo con rami
-condizionali e punti di convergenza \cite{langgraphDocs}. La scelta linguistica
-determina il piano, ma è il grafo a stabilire quali nodi possano essere eseguiti
-e quando i risultati siano pronti per la risposta.
+condizionali e punti di convergenza \cite{langgraphDocs}. Il modello propone il
+piano; il grafo stabilisce quali nodi eseguire e quando i risultati sono pronti
+per la risposta.
 
 Redis conserva il checkpoint associato alla conversazione: messaggi utili,
 risultati raccolti, filtri e riferimenti agli artefatti. Un follow-up come
-``raggruppali per giorno'' può quindi operare sul dataset precedente senza
-interrogare di nuovo le sorgenti. La persistenza per thread deriva dal
-checkpointer LangGraph e dalla sua integrazione Redis
+``raggruppali per giorno'' opera quindi sul dataset precedente senza
+interrogare di nuovo le sorgenti. La persistenza per conversazione deriva da
+LangGraph e dalla sua integrazione con Redis
 \cite{langgraphPersistence,redisCheckpointer}; il riuso selettivo dei risultati
-è una scelta del workflow applicativo \cite{guidaProgetto2026}. Nel percorso ordinario la
-chiave deriva dal \texttt{thread\_id} della sessione workspace (e, nel client
-legacy, dagli identificativi utente/chat di Open WebUI). Il fallback basato
-sul primo messaggio, previsto per client privi di metadati, non offre un
-isolamento adeguato a un'installazione multiutente.
+è una scelta del workflow applicativo \cite{guidaProgetto2026}. La chiave della
+memoria è l'identificativo della sessione del workspace (o, nel client legacy,
+gli identificativi di utente e chat).
 
 \subsection{Modello e distribuzione}
 
-Il modello servito da Ollama è remoto rispetto al backend (nel prototipo
-documentato, tipicamente \texttt{qwen3:8b} per il workflow e un modello
-distinto per il Judge). Riceve il contesto preparato dai nodi e interviene
-nell'interpretazione, nel piano e nella risposta; non accede direttamente a
-GDACS, Copernicus o Redis e non calcola i valori dei grafici. Le chiamate sono
-gestite dal client applicativo mediante timeout, retry selettivi e limiti di
-concorrenza, secondo la configurazione del progetto \cite{guidaProgetto2026}.
-Ollama fornisce il servizio di inferenza \cite{ollamaDocs}.
+Il modello linguistico è servito da Ollama su una macchina distinta dal backend
+(nel prototipo, tipicamente qwen3:8b per il workflow e un modello separato per
+il Judge) \cite{ollamaDocs}. Riceve il contesto preparato dai nodi e interviene
+nell'interpretazione, nel piano e nella risposta; l'accesso alle fonti, alla
+memoria e il calcolo dei valori restano compito del codice applicativo, che
+gestisce le chiamate con timeout, retry selettivi e limiti di concorrenza
+\cite{guidaProgetto2026}.
 
-Docker Compose, nella root del repository umbrella, coordina backend, asset
-frontend, Keycloak, Redis, servizi MCP e infrastruttura NebulaGraph sulla rete
-\texttt{pecillispace}. I profili \texttt{legacy-ui}, \texttt{harvest} e
-\texttt{tools}, insieme all'overlay di osservabilità, aggiungono le rispettive
-funzioni \cite{dockerComposeDocs,guidaProgetto2026}. La
+Docker Compose coordina backend, interfaccia, Keycloak, Redis, servizi MCP e
+NebulaGraph su una rete condivisa; configurazioni opzionali aggiungono il client
+legacy, la raccolta periodica dei metadati e l'osservabilità
+\cite{dockerComposeDocs,guidaProgetto2026}. La
 Tabella~\ref{tab:tecnologie-abilitanti} riporta la responsabilità assegnata a
 ciascun elemento dello stack.
 
@@ -123,17 +117,17 @@ ciascun elemento dello stack.
 Tecnologia & \bfseries Ruolo nel sistema \\
 \midrule
 Copernicus Data Workspace & Home, chat, artefatti Discovery/operativi e ripresa sessioni. \\
-Keycloak & Autenticazione OIDC, realm \texttt{pecilli} e ruoli applicativi. \\
+Keycloak & Autenticazione OIDC e ruoli applicativi. \\
 LangChain & Comunicazione strutturata tra agenti e modello linguistico. \\
 LangGraph & Coordinamento dei passaggi, delle fonti e dei follow-up. \\
 Redis Stack & Checkpoint per conversazione e riuso dei risultati. \\
 NebulaGraph & Catalogo condiviso di metadati Marine, STAC e Drought. \\
 Ollama & Inferenza del modello usato dal workflow (e, se configurato, dal Judge). \\
 FastAPI e Pydantic & API del sistema e controllo della forma dei dati scambiati. \\
-Docker Compose & Avvio coordinato dei servizi sulla rete \texttt{pecillispace}. \\
+Docker Compose & Avvio coordinato dei servizi su una rete condivisa. \\
 Prometheus e Grafana & Raccolta delle metriche e diagnosi aggregata LLMOps. \\
 OpenTelemetry e Phoenix & Tracciamento delle singole esecuzioni. \\
-Open WebUI (opzionale) & Client legacy di chat; profilo Compose \texttt{legacy-ui}. \\
+Open WebUI (opzionale) & Client legacy di chat. \\
 \bottomrule
 \end{tabularx}
 \caption{Tecnologie del nucleo applicativo, del catalogo e dell'osservabilità.}
@@ -153,15 +147,15 @@ percorso operativo prima della selezione delle sorgenti.}
 
 L'applicazione segue una struttura a componenti. La dashboard nativa gestisce
 l'interazione con l'utente (chat, ripresa sessioni, artefatti Discovery e
-acquisizioni) dopo l'accesso OIDC via Keycloak; FastAPI espone gli endpoint
+acquisizioni) dopo l'accesso tramite Keycloak; FastAPI espone gli endpoint
 della chat e degli artefatti; LangGraph coordina gli agenti; i servizi MCP e i
 client dedicati accedono alle fonti esterne. La dashboard analitica delle
-acquisizioni non è un testo generato dal modello: è un artefatto HTML che il
-browser carica tramite API e rende a partire da un contratto JSON validato.
+acquisizioni è un artefatto HTML che il browser carica tramite API e costruisce
+a partire da un contratto JSON validato.
 
 Il catalogo NebulaGraph aggiunge una base di metadati condivisa fra le
 conversazioni, distinta dai checkpoint Redis. Gli harvester aggiornano il
-catalogo; il backend lo consulta attraverso repository controllati. Metriche e
+catalogo; il backend lo consulta attraverso query predefinite. Metriche e
 trace osservano l'esecuzione, mentre il runner del benchmark invoca lo stesso
 workflow per valutarlo \cite{guidaProgetto2026}.
 
@@ -211,58 +205,42 @@ invoca il workflow, mentre la telemetria ne osserva l'esecuzione.}
 \label{fig:architettura-complessiva}
 \end{figure}
 
-Il modello linguistico non comunica direttamente con i servizi remoti. Produce
-decisioni strutturate che il codice applicativo valida prima di invocare le
-integrazioni e acquisirne il risultato.
+Il modello linguistico produce decisioni strutturate; il codice applicativo le
+valida, invoca le integrazioni e ne acquisisce il risultato.
 
-I ruoli dello stack sono già riepilogati nella
-Tabella~\ref{tab:tecnologie-abilitanti}. In questa architettura LangGraph e Redis
-costituiscono il nucleo stateful, FastAPI espone il servizio e Pydantic delimita
-i contratti. Le fonti e le dipendenze principali sono riassunte in
-Figura~\ref{fig:architettura-complessiva}; ECharts e Leaflet sono invece
-librerie di presentazione usate dal browser.
+In questa architettura LangGraph e Redis costituiscono il nucleo con stato,
+FastAPI espone il servizio e Pydantic delimita i contratti
+(Tabella~\ref{tab:tecnologie-abilitanti} e
+Figura~\ref{fig:architettura-complessiva}); ECharts e Leaflet sono le librerie
+di presentazione usate dal browser.
 
 \section{Organizzazione del backend e del frontend}
 
-Il backend è suddiviso secondo responsabilità esplicite:
+Il backend divide le responsabilità in moduli distinti: gli agenti del
+workflow (gateway, interpretazione, orchestrazione, fonti, Discovery, grafici e
+conversazione); le API per chat, salute del sistema, artefatti e valutazioni; un
+nucleo comune con stato condiviso, gestione degli errori e osservabilità; i
+client verso le fonti e verso il catalogo a grafo; i modelli dei dati scambiati;
+i servizi di supporto (risoluzione di luogo e tempo, artefatti, health check);
+gli strumenti di valutazione. Un modulo dedicato costruisce il grafo LangGraph.
 
-\begin{description}
-    \item[\texttt{agents/}] gateway, parsing dell'intento, orchestrazione,
-    ricerca, GDACS, Copernicus STAC/CEMS, Discovery, grafici, dashboard e
-    conversazione;
-    \item[\texttt{api/}] route FastAPI per chat, salute, artefatti (lettura,
-    mutazioni, revisioni, chat contestuale) e valutazioni;
-    \item[\texttt{core/}] stato condiviso, classe base, registro, errori e
-    hook di osservabilità;
-    \item[\texttt{integrations/}] client CDSE/STAC, trasformazione geospaziale
-    e client di lettura Nebula;
-    \item[\texttt{repositories/}] query del catalogo a grafo;
-    \item[\texttt{models/}] modelli Pydantic e contratti di scambio;
-    \item[\texttt{services/}] MCP, risoluzione di luogo e tempo, Discovery,
-    artefatti, mutazioni, health check;
-    \item[\texttt{evals/}] dataset, runner, Judge e statistiche;
-    \item[\texttt{workflow.py}] costruzione del grafo LangGraph.
-\end{description}
+Il frontend è servito dal backend e separa chat, workspace, filtri, grafici,
+mappa, tabelle, revisioni, confronti e pannello valutazioni. Il browser usa
+ECharts per i grafici e Leaflet per la mappa; l'interfaccia è bilingue
+(IT/EN). Il viewer STAC dedicato è un'applicazione separata.
 
-Il frontend applicativo vive in \path{frontend/dashboard/} e viene servito dal
-backend. I moduli principali separano chat, workspace, filtri, grafici, mappa,
-tabelle, revisioni, confronti e pannello valutazioni. Il browser usa ECharts
-per i grafici e Leaflet per la mappa; l'interfaccia è bilingue (IT/EN). Il
-viewer STAC dedicato resta in \path{frontend/copernicus_viewer/}.
-
-La strumentazione è raccolta nel pacchetto \texttt{copernicus\_llmops}
-(\path{observability/llmops/}); gli harvester e lo schema Nebula sono sotto
-\path{copernicus-harvester/}. I due server MCP sono esterni al package
-applicativo e possiedono dipendenze e container autonomi: un problema del feed
-GDACS non richiede di modificare il codice del ramo CEMS o STAC.
+Strumentazione, harvester e schema del catalogo hanno pacchetti propri. I due
+server MCP sono esterni all'applicazione, con dipendenze e container autonomi:
+un problema del feed GDACS resta confinato al relativo servizio, senza toccare
+i rami CEMS o STAC.
 
 \section{Il grafo degli agenti}
 
 \subsection{Percorso principale}
 
-Il \texttt{WorkflowAgent} è il punto di ingresso logico. Una nuova richiesta
-attraversa una parte comune e viene instradata verso Discovery o verso il
-percorso operativo. Nel secondo caso il piano seleziona i worker necessari.
+Il workflow ha un unico punto di ingresso. Una nuova richiesta attraversa una
+parte comune e viene instradata verso la Discovery o verso il percorso
+operativo; in quest'ultimo il piano seleziona le fonti necessarie.
 
 \begin{figure}[htbp]
 \centering
@@ -292,36 +270,34 @@ percorso operativo. Nel secondo caso il piano seleziona i worker necessari.
         {risposta diretta fuori dominio} (out.west);
 \end{tikzpicture}}
 \caption{Due percorsi di una nuova richiesta ammessa. Il disegno sintetizza i
-rami e omette i dettagli dei follow-up, dei nodi finali di verifica e della
-dipendenza CEMS--STAC descritta nel testo.}
+rami; follow-up, nodi finali di verifica e dipendenza CEMS--STAC sono descritti
+nel testo.}
 \label{fig:workflow-principale}
 \end{figure}
 
 Nel ramo operativo Search e Copernicus STAC costituiscono il piano di base;
-GDACS e CEMS lo integrano secondo la richiesta.
-LangGraph usa oggetti \texttt{Send} per creare un
-\texttt{source\_worker} per ogni sorgente selezionata. Search, GDACS e STAC
-possono quindi procedere contemporaneamente. Quando sono richiesti insieme
-CEMS e STAC, il sistema esegue prima CEMS: l'area o le coordinate
-dell'attivazione possono rendere più precisa la successiva ricerca
-satellitare.
+GDACS e CEMS lo integrano secondo la richiesta. LangGraph avvia un'istanza di
+lavoro per ogni sorgente selezionata, così Search, GDACS e STAC procedono in
+parallelo. Quando sono richiesti insieme CEMS e STAC, il sistema esegue prima
+CEMS: l'area o le coordinate dell'attivazione rendono più precisa la
+successiva ricerca satellitare.
 
 \subsection{Gateway e confine di dominio}
 
-Il Gateway Agent classifica ogni turno, non soltanto il primo. Sono ammessi
-argomenti relativi a geografia, spazio, osservazione della Terra, clima,
-pericoli naturali ed emergenze. Una domanda estranea riceve una risposta diretta
-e non raggiunge parser, motore di ricerca o dashboard.
+Il Gateway classifica ogni turno della conversazione. Sono ammessi argomenti
+relativi a geografia, spazio, osservazione della Terra, clima, pericoli
+naturali ed emergenze. Una domanda estranea riceve subito una risposta diretta,
+senza attivare parser, ricerca o dashboard.
 
-Se la classificazione non è disponibile, il sistema adotta un comportamento
-\emph{fail closed}: non avvia integrazioni esterne. La scelta riduce chiamate
-non necessarie e impedisce che un errore del modello allarghi implicitamente il
+Se la classificazione fallisce, il sistema adotta un comportamento
+\emph{fail closed} e resta senza chiamate esterne. La scelta riduce le chiamate
+superflue e impedisce che un errore del modello allarghi implicitamente il
 dominio operativo.
 
 \subsection{Parsing dell'intento}
 
-L'Intent Parsing Agent converte il testo in una
-\texttt{ResolvedRequestSchema}. Lo schema contiene:
+L'agente di interpretazione converte il testo in una richiesta strutturata che
+contiene:
 
 \begin{itemize}
     \item argomenti e relativa categoria;
@@ -333,61 +309,49 @@ L'Intent Parsing Agent converte il testo in una
 
 Espressioni quali ``oggi'', ``la settimana scorsa'' o ``negli ultimi 30
 giorni'' vengono trasformate in estremi temporali. Se manca un'informazione
-indispensabile, il parser produce una richiesta di chiarimento; la domanda
-parziale viene conservata e completata al turno successivo.
+indispensabile, il parser chiede un chiarimento; la domanda parziale viene
+conservata e completata al turno successivo.
 
 \subsection{Orchestratore e piano di esecuzione}
 
-L'Orchestrator Agent restituisce una lista di sorgenti, non una singola classe.
-Il piano ammette \texttt{search}, \texttt{gdacs}, \texttt{copernicus} e
-\texttt{copernicus\_ems}. Alla decisione del modello si affiancano regole
-deterministiche. Nel percorso operativo multi-sorgente qui descritto, Search e
-Copernicus STAC forniscono contesto web e acquisizioni per la dashboard; questa
-regola non implica l'attivazione di tali sorgenti nella Discovery. Le richieste di pericolo
-aggiungono GDACS, mentre un codice CEMS esplicito aggiunge il ramo dedicato alle
-attivazioni. Il workflow può inoltre applicare GDACS come fonte strutturata di
-supporto quando il piano segnala un possibile pericolo.
+L'Orchestratore restituisce una lista di sorgenti scelte fra ricerca web,
+GDACS, Copernicus STAC e CEMS. Alla decisione del modello si affiancano regole
+deterministiche: nel percorso operativo Search e Copernicus STAC forniscono
+contesto web e acquisizioni per la dashboard; le richieste su pericoli naturali
+aggiungono GDACS; un codice di attivazione CEMS esplicito aggiunge il ramo
+dedicato. Il workflow usa inoltre GDACS come fonte strutturata di supporto
+quando il piano segnala un possibile pericolo.
 
-Il risultato è una forma di orchestrazione ibrida: l'LLM gestisce la varietà
-del linguaggio, mentre regole verificabili preservano i vincoli applicativi.
+Ne risulta un'orchestrazione ibrida: l'LLM gestisce la varietà del linguaggio,
+regole verificabili preservano i vincoli applicativi.
 
 \subsection{Il ramo Discovery}
 \label{subsec:discovery-workflow}
 
-La Discovery usa i nodi \texttt{discovery\_intent},
-\texttt{discovery\_retrieve} e \texttt{discovery\_rank}. L'agente d'intento
-rappresenta tema, area, periodo, tipo di risorsa e variabili. Il servizio
-\path{services/copernicus_discovery.py} espande alias di dominio, seleziona le
-sorgenti e interroga \texttt{CopernicusGraphRepository}. Controlli di
-compatibilità filtrano i candidati sulla base dei metadati disponibili.
-Un'area incompatibile non giustifica la sostituzione silenziosa del luogo;
-eventuali alternative temporali richiedono un avviso.
+La Discovery procede in tre passi: interpretazione, recupero e ordinamento.
+L'agente d'intento rappresenta tema, area, periodo, tipo di risorsa e
+variabili. Il servizio di Discovery espande alias di dominio, seleziona i
+cataloghi e interroga il grafo; controlli di compatibilità filtrano i
+candidati sulla base dei metadati disponibili. Il luogo richiesto viene
+rispettato, e ogni alternativa temporale proposta è accompagnata da un avviso.
 
-Il ranking è deterministico: il metodo
-\texttt{CopernicusDiscoveryRankingAgent.rank()} applica la politica
-\texttt{graph-score-v1}, senza sottoporre i candidati a un LLM. Lo score è
-calcolato in \texttt{CopernicusDiscoveryService.\_score()} su feature
-verificabili nei metadati (corrispondenza di titolo/identità/variabili,
-compatibilità spaziale e temporale, tipo di risorsa, servizio preferito), con
-penalità per incompatibilità e normalizzazione finale in $[0,1]$. La selezione
-ammette candidati con punteggio almeno $\max(0{,}28,\mathrm{best}-0{,}20)$ e
-al più 30 risorse; se sono richieste più variabili esplicite, viene forzata la
-presenza di un rappresentante per ciascuna. Le regole sono semplici e
-ispezionabili, ma non apprese: come mostrano le metriche di ordinamento del
-Capitolo~\ref{cap:7}, il ranking è il punto più debole della Discovery. Il nome
-``Agent'' identifica una responsabilità del workflow, non un componente che
-effettua inferenza linguistica.
+Il ranking è basato su regole e calcolato dal codice. Il punteggio combina
+caratteristiche verificabili nei metadati (corrispondenza di titolo, identità e
+variabili, compatibilità spaziale e temporale, tipo di risorsa, servizio
+preferito), applica penalità per le incompatibilità e viene normalizzato in
+$[0,1]$. Sono selezionati i candidati con punteggio almeno
+$\max(0{,}28,\mathrm{best}-0{,}20)$, fino a 30 risorse; se la domanda nomina più
+variabili, ciascuna ha almeno un rappresentante. Le regole sono semplici e
+ispezionabili, ma fissate a mano: come mostrano le metriche di ordinamento del
+Capitolo~\ref{cap:7}, il ranking è il punto più debole della Discovery.
 
-Il repository limita ogni interrogazione a 120 righe; il servizio conserva al
-massimo 30 candidati prima del ranking. Il ranking può quindi ordinare soltanto
-ciò che il recupero gli consegna: qualità del retrieval e qualità
-dell'ordinamento restano distinte. La ground truth del benchmark usa spesso un
-target unico; una domanda di Discovery può però ammettere più risorse valide, e
-il controllo critico sulla citazione deve essere interpretato rispetto
-all'unicità del riferimento. In mancanza di una regola verificata sulle
-alternative, un risultato valido diverso dal target può essere penalizzato:
-questo è un limite del benchmark, non una prova di errore della risorsa. La risposta e l'artefatto riportano identificativi,
-metadati e collegamenti delle risorse selezionate \cite{guidaProgetto2026}.
+Ogni interrogazione al grafo restituisce al massimo 120 righe, e al ranking
+arrivano al più 30 candidati: qualità del recupero e qualità dell'ordinamento
+vanno quindi valutate separatamente. Il benchmark usa spesso un solo target per
+domanda, mentre una richiesta di Discovery può ammettere più risorse valide;
+una risorsa corretta diversa dal target può perciò risultare penalizzata. La
+risposta e l'artefatto riportano identificativi, metadati e collegamenti delle
+risorse selezionate \cite{guidaProgetto2026}.
 
 \section{Catalogo a grafo e pipeline di harvesting}
 \label{sec:catalogo-grafo}
@@ -395,10 +359,8 @@ metadati e collegamenti delle risorse selezionate \cite{guidaProgetto2026}.
 \subsection{Modello del dominio}
 
 NebulaGraph conserva vertici, archi orientati e proprietà. I tag descrivono i
-tipi dei vertici; gli edge type descrivono le relazioni. Lo space applicativo
-predefinito nel Compose è \texttt{pecillispace}. La struttura logica riunisce i
-tre cataloghi sotto \texttt{service:copernicus}, collegato mediante
-\texttt{HAS\_SOURCE} a Marine, CDSE/STAC e Drought.
+tipi dei vertici; gli edge type descrivono le relazioni. Un nodo radice
+Copernicus riunisce i tre cataloghi Marine, CDSE/STAC e Drought.
 
 \begin{table}[htbp]
 \centering
@@ -422,66 +384,56 @@ sono rappresentate gerarchie dei layer e disponibilità temporali. \\
 \label{tab:sottografi}
 \end{table}
 
-Gli identificativi deterministici hanno prefissi di dominio per separare le
-sorgenti. Un dataset Marine è collegato alle sue variabili direttamente e
-attraverso il contesto di versioni e servizi di accesso. La radice comune
-permette la navigazione fra cataloghi, ma non costituisce un'ontologia di
-equivalenze fra ogni variabile Marine e ogni indicatore Drought.
+Ogni vertice ha un identificativo stabile con un prefisso che ne indica il
+catalogo di provenienza. Un dataset Marine è collegato alle sue variabili sia
+direttamente sia attraverso versioni e servizi di accesso. La radice comune
+consente di navigare fra i cataloghi; le corrispondenze tra variabili Marine e
+indicatori Drought restano un possibile sviluppo.
 
 \subsection{Raccolta, aggiornamento e riconciliazione}
 
-Ogni harvester raccoglie e normalizza i metadati in un
-\texttt{GraphPayload}, poi il repository esegue upsert di vertici e archi.
-Ogni harvester definisce lo schema del proprio sottografo.
+Ogni harvester definisce lo schema del proprio sottografo, raccoglie e
+normalizza i metadati e li scrive nel grafo aggiornando o creando vertici e
+archi.
 
-I campi \texttt{first\_seen\_at}, \texttt{last\_seen\_at} e
-\texttt{last\_harvested\_at} descrivono prima osservazione, ultima presenza e
-ultima elaborazione; \texttt{metadata\_hash} permette di riconoscere cambiamenti.
-La riconciliazione può mantenere risorse scomparse con \texttt{active=false}.
-Per una vista corrente occorre filtrare sia vertici sia archi attivi.
+Per ogni risorsa il catalogo registra prima osservazione, ultima presenza e
+ultima elaborazione, oltre a un'impronta dei metadati che rivela i cambiamenti.
+Le risorse scomparse vengono marcate come inattive anziché cancellate; una
+vista corrente filtra quindi vertici e archi attivi.
 
-Una protezione contro rimozioni anomale tratta come sospetto un harvest che
-farebbe sparire più di un quarto delle risorse di una categoria.
-Gli item STAC sono accumulati per
-finestre incrementali: l'assenza in una finestra recente non ne prova la
-scomparsa dal catalogo globale. Un limite di sicurezza raggiunto deve emergere
-come errore, anziché essere presentato come raccolta completa.
+Un harvest che farebbe sparire più di un quarto delle risorse di una categoria
+viene trattato come sospetto. Gli item STAC sono raccolti per finestre
+temporali successive, e l'assenza da una finestra recente vale solo per quella
+finestra. Il raggiungimento di un limite di sicurezza è segnalato come errore.
 
-L'aggiornamento a batch non offre un'atomicità globale dell'harvest: un guasto
-può lasciare alcuni batch già salvati. Inoltre gli upsert aggiornano proprietà
-correnti, senza conservare tutte le revisioni precedenti. Timestamp e flag di
-attività rendono lo stato ispezionabile, ma non permettono di ricostruire
-qualsiasi snapshot storico.
+La scrittura avviene a blocchi: un guasto a metà raccolta può lasciare salvati
+alcuni blocchi. Il grafo conserva lo stato corrente delle proprietà; timestamp e
+indicatore di attività rendono lo stato ispezionabile, mentre la storia completa
+delle revisioni richiederebbe un meccanismo di versionamento dedicato.
 
-Gli harvester vengono eseguiti ogni notte dal profilo \texttt{harvest}. Lock,
-timeout e tentativi limitati controllano l'esecuzione; la salute
-del catalogo richiede anche la freschezza dell'ultimo job riuscito, oltre alla
-raggiungibilità del database \cite{guidaProgetto2026}.
+Gli harvester vengono eseguiti ogni notte, con lock, timeout e tentativi
+limitati. La salute del catalogo considera sia la raggiungibilità del database
+sia la freschezza dell'ultima raccolta riuscita \cite{guidaProgetto2026}.
 
 \subsection{Infrastruttura e confine di lettura}
 
-NebulaGraph separa gestione dello schema (\texttt{metad}), conservazione dei
-dati (\texttt{storaged}) ed esecuzione delle query (\texttt{graphd})
-\cite{nebulaArchitecture}. Il prototipo usa NebulaGraph 3.8.0 con un'istanza
-per ciascun servizio e una sola replica dei dati: la configurazione è adatta
-allo sviluppo, non offre alta disponibilità.
+NebulaGraph separa gestione dello schema, conservazione dei dati ed esecuzione
+delle query in tre servizi distinti \cite{nebulaArchitecture}. Il prototipo usa
+NebulaGraph 3.8.0 con un'istanza per servizio e una sola replica dei dati, una
+configurazione adatta allo sviluppo; l'alta disponibilità richiede repliche
+aggiuntive.
 
-La Discovery usa query predisposte dal codice, tramite
-\path{repositories/copernicus_graph.py} e
-\path{integrations/nebula/client.py}. \texttt{NebulaReadClient} ammette i
-prefissi di lettura \texttt{MATCH}, \texttt{GO}, \texttt{FETCH} e
-\texttt{SHOW}, blocca istruzioni multiple e mutazioni fuori dai letterali e
-valida i parametri. Il modello non consegna al database uno script nGQL
-arbitrario. Il vincolo è applicativo: l'utente predefinito del Compose è
-\texttt{root}, quindi non dimostra una restrizione equivalente dei privilegi
-del database.
+La Discovery usa soltanto query predisposte dal codice. Il client di lettura
+accetta esclusivamente istruzioni di consultazione, blocca istruzioni multiple e
+modifiche e valida i parametri; il modello linguistico fornisce parametri,
+mai query complete. Il vincolo è applicato dall'applicazione: l'utente del
+database configurato nel prototipo ha privilegi completi.
 
 \section{Agenti specializzati e nodi di elaborazione}
 
-Nel codice molti componenti portano il suffisso ``Agent'', ma solo alcuni usano
-un LLM per decidere. La Tabella~\ref{tab:agenti-llm} distingue nodi decisionali
-linguistici da servizi e trasformazioni deterministiche, così che il titolo
-multiagentico non venga letto come ``ogni nodo ragiona con un modello''.
+Nel codice molti componenti si chiamano ``Agent'', ma solo alcuni usano un LLM
+per decidere. La Tabella~\ref{tab:agenti-llm} distingue i nodi decisionali
+linguistici dai servizi e dalle trasformazioni deterministiche.
 
 \begin{table}[htbp]
 \centering
@@ -500,9 +452,9 @@ Discovery intent & Sì & Sì (intento catalogo) & Estrazione tema/area/periodo \
 \addlinespace[1pt]
 Intent / Orchestrator & Sì & Sì (piano fonti) & Parametri e selezione sorgenti \\
 \addlinespace[1pt]
-Discovery retrieve & No & No & Query Nebula parametrizzate \\
+Discovery retrieve & No & No & Query parametrizzate sul grafo \\
 \addlinespace[1pt]
-Discovery rank & No & Secondo regole fisse & Ordinamento \texttt{graph-score-v1} \\
+Discovery rank & No & Secondo regole fisse & Ordinamento a punteggio \\
 \addlinespace[1pt]
 Worker fonti & Ibrido & Esecuzione del piano & Recupero Search, GDACS, STAC e CEMS \\
 \addlinespace[1pt]
@@ -519,116 +471,106 @@ recupero e filtri nel codice.}
 \label{tab:agenti-llm}
 \end{table}
 
-In sintesi, gli agenti decisionali linguistici sono concentrati in gateway,
-parsing/intento, orchestrazione e conversazione; ranking, repository, filtri
-STAC e validazione delle viste sono elaborazioni deterministiche.
+Gli agenti decisionali linguistici sono quindi concentrati in gateway,
+interpretazione, orchestrazione e conversazione; ranking, accesso al grafo,
+filtri STAC e validazione delle viste sono elaborazioni deterministiche.
 
 \section{Contratti e stato condiviso}
 
-Gli agenti decisionali producono structured output validato da Pydantic. Questa
-scelta separa due linguaggi:
+Gli agenti decisionali producono output strutturato validato da Pydantic.
+Questa scelta separa due linguaggi:
 
 \begin{itemize}
     \item JSON tipizzato per lo scambio interno;
     \item Markdown in linguaggio naturale per l'utente.
 \end{itemize}
 
-Lo stato LangGraph estende \texttt{MessagesState} e contiene richiesta
-risolta, piano, azione di follow-up, risultati delle quattro fonti, grafici,
-dashboard e risposta finale. Per la dashboard conserva inoltre filtri collegati,
-stato visuale, revisioni e conversazioni contestuali per settore. Ogni campo è
-associato a un \texttt{thread\_id}, che separa logicamente i checkpoint.
-L'isolamento tra utenti richiede inoltre l'autorizzazione sull'identificativo
-di conversazione e sugli artefatti; il solo nome della chiave non la dimostra.
+Lo stato del grafo contiene messaggi, richiesta risolta, piano, azione di
+follow-up, risultati delle quattro fonti, grafici, dashboard e risposta finale.
+Per la dashboard conserva inoltre filtri collegati, stato visuale, revisioni e
+conversazioni contestuali per settore. Ogni stato è associato
+all'identificativo della conversazione, che separa logicamente i checkpoint.
 
 Il ramo Discovery aggiunge intento, risorse recuperate e selezionate e
-riferimento al proprio artefatto. Questi dati appartengono al contesto della
-conversazione; il catalogo NebulaGraph resta invece una base persistente
-condivisa, aggiornata dagli harvester.
+riferimento al proprio artefatto. Questi dati appartengono alla singola
+conversazione; il catalogo NebulaGraph è invece una base persistente condivisa,
+aggiornata dagli harvester.
 
-I risultati delle sorgenti seguono un'impostazione comune: stato
-dell'operazione, dataset normalizzato, aggregazioni, fonti ed eventuali
-informazioni di errore. Il Conversation Agent non deve conoscere il formato
-originale di RSS, STAC o CEMS.
+I risultati delle sorgenti seguono un formato comune: stato dell'operazione,
+dataset normalizzato, aggregazioni, fonti ed eventuali errori. L'agente di
+conversazione lavora così su un'unica rappresentazione, indipendente dai
+formati originali di RSS, STAC o CEMS.
 
 \section{Persistenza}
 
-La persistenza separa due bisogni: riprendere una conversazione e conservare
-artefatti troppo grandi per il prompt. Nessuno dei due meccanismi sostituisce da
-solo i controlli di autorizzazione dell'utente autenticato.
+La persistenza risponde a due bisogni: riprendere una conversazione e
+conservare artefatti troppo grandi per il prompt.
 
 \subsection{Checkpoint conversazionali}
 
-Redis Stack è l'unico backend della memoria conversazionale. Il
-\texttt{AsyncRedisSaver} di LangGraph salva messaggi e stato dopo i nodi del
-grafo. A ogni nuova richiesta il checkpoint del relativo
-\texttt{thread\_id} viene ricaricato automaticamente. Se Redis non è
-configurato o non è raggiungibile, il backend non viene dichiarato pronto.
+Redis Stack è l'unico backend della memoria conversazionale. LangGraph salva
+messaggi e stato dopo i nodi del grafo e, a ogni nuova richiesta, ricarica
+automaticamente il checkpoint della conversazione. Il backend si dichiara
+pronto solo quando Redis è raggiungibile.
 
 La cronologia attiva è limitata agli ultimi messaggi utili, mentre i risultati
-strutturati restano nello stato, evitando una crescita indefinita del prompt.
+strutturati restano nello stato: il prompt mantiene così una dimensione
+contenuta.
 
 \subsection{Archivio degli artefatti}
 
 Le heatmap e i payload della dashboard possono essere più grandi della memoria
-testuale. Sono quindi salvati come artefatti JSON in un archivio dedicato. Lo
-stato conserva l'identificativo; il browser legge l'artefatto con
-\texttt{GET /api/dashboards/\{id\}} e invia mutazioni controllate a endpoint
-dedicati. Ogni modifica crea una revisione che può essere confrontata,
-annullata o ripristinata. In caso di indisponibilità temporanea di CDSE, il
-servizio può cercare un artefatto precedente compatibile per area, collezione
-e intervallo temporale, dichiarandone il riuso.
+testuale e sono quindi salvati come artefatti JSON in un archivio dedicato. Lo
+stato conserva l'identificativo; il browser legge l'artefatto tramite API e
+invia modifiche controllate a endpoint dedicati. Ogni modifica crea una
+revisione che può essere confrontata, annullata o ripristinata. Se CDSE è
+temporaneamente indisponibile, il servizio può riusare un artefatto precedente
+compatibile per area, collezione e intervallo temporale, dichiarandolo
+nella risposta.
 
 \section{Dashboard generativa e verificabile}
 
-Nel percorso operativo il workflow produce una dashboard analitica a partire
-dai soli record STAC Copernicus normalizzati; nel workspace essa compare come
-artefatto del percorso ``Analisi dati Copernicus''. La Discovery presenta
-invece risorse del catalogo a grafo (``Ricerca dati Copernicus''). Search,
-GDACS e CEMS rimangono fonti della risposta testuale o di sezioni dedicate e
-non alimentano le serie quantitative della dashboard STAC. La provenienza dei
-valori resta così esplicita e non vengono confrontate nello stesso grafico
-grandezze eterogenee.
+Nel percorso operativo il workflow costruisce la dashboard analitica dai soli
+record STAC Copernicus normalizzati; nel workspace essa compare come artefatto
+del percorso ``Analisi dati Copernicus''. La Discovery presenta invece risorse
+del catalogo a grafo (``Ricerca dati Copernicus''). Search, GDACS e CEMS
+alimentano la risposta testuale o sezioni dedicate. Ogni serie quantitativa ha
+così un'unica provenienza, e lo stesso grafico confronta solo grandezze
+omogenee.
 
 L'artefatto contiene KPI, grafici a barre, linee o torta, tabella, heatmap e
 provenienza: campi usati, filtri attivi, metodo di aggregazione, numero di
-record e identificativi dei prodotti. L'LLM può scegliere o pianificare una
-vista, ma il backend ricalcola conteggi, percentuali, medie, variazioni e
-confronti sui record; non accetta valori numerici prodotti liberamente dal
-modello.
+record e identificativi dei prodotti. L'LLM propone le viste; conteggi,
+percentuali, medie, variazioni e confronti sono calcolati dal codice sui record
+recuperati.
 
 I controlli consentono di cambiare tipo di grafico, ordinamento, Top~N,
 visibilità e filtro. Un click su grafico o tabella può attivare un
 cross-filter: backend e interfaccia ricalcolano coerentemente grafici, KPI,
 tabella e heatmap. La chat contestuale di ciascun settore risponde sul
-risultato corrente e può richiedere una mutazione tipizzata; usa la ricerca
-web solo quando la domanda richiede contesto esterno non deducibile dai dati
+risultato corrente e può richiedere una modifica tipizzata; ricorre alla
+ricerca web solo quando la domanda richiede contesto esterno ai dati
 visualizzati.
 
 \subsection{Leggibilità e correttezza dei grafici}
 \label{subsec:leggibilita-grafici}
 
-La dashboard applica regole di rendering per evitare che una visualizzazione
-formalmente corretta diventi illeggibile. I grafici temporali, quelli con più
-di otto categorie e il grafico primario occupano l'intera riga; gli altri sono
-disposti in una griglia responsiva. Per molte categorie sono disponibili
-scorrimento e zoom; le etichette vengono troncate, ruotate quando necessario e
-rese non sovrapposte. Le torte mostrano etichette esterne soltanto fino a sei
-categorie e usano una legenda scorrevole; le barre orizzontali aumentano
-dinamicamente l'altezza. Il renderer osserva inoltre i cambiamenti di dimensione
-del contenitore e ridimensiona ECharts dopo il caricamento e quando la sezione
-viene riaperta.
+La dashboard applica regole di impaginazione che mantengono leggibili anche i
+grafici più densi. I grafici temporali, quelli con più di otto categorie e il
+grafico primario occupano l'intera riga; gli altri sono disposti in una griglia
+responsiva. Per molte categorie sono disponibili scorrimento e zoom; le
+etichette vengono troncate, ruotate quando necessario e distanziate. Le torte
+mostrano etichette esterne fino a sei categorie e usano una legenda scorrevole;
+le barre orizzontali adattano l'altezza al numero di voci. I grafici si
+ridimensionano con il contenitore e quando la sezione viene riaperta.
 
-Queste regole non sostituiscono la validazione semantica: prima di salvare una
-modifica, il Validator controlla l'allineamento di etichette, valori e serie.
-Nella versione attuale il Validator sostituisce con zero i valori non
-numerici o mancanti e segnala la riparazione. Questo rende il grafico sempre
-disegnabile, ma confonde un dato assente con uno zero osservato: una
-miglioria naturale è escludere tali valori e mostrarli come mancanti. La
-validazione resta quindi strutturale e non garantisce da sola la correttezza
-dei dati.
-Ogni grafico offre anche una tabella dei
-dati e l'esportazione CSV, così che il risultato visivo resti verificabile.
+Prima di salvare una modifica, il Validator controlla l'allineamento di
+etichette, valori e serie. Nella versione attuale sostituisce con zero i valori
+mancanti o non numerici e segnala la riparazione: il grafico resta disegnabile,
+ma un dato assente appare come uno zero osservato. Una miglioria naturale è
+escludere tali valori e mostrarli come mancanti. Ogni grafico offre anche una
+tabella dei dati e l'esportazione CSV, così il risultato visivo resta
+verificabile.
 
 \section{Integrazione MCP}
 
@@ -642,10 +584,10 @@ scopre e invoca i tool tramite un client comune. Gli strumenti principali sono:
     \item elenco, sintesi e dettaglio delle attivazioni CEMS.
 \end{itemize}
 
-Gli indirizzi interni e le credenziali restano nella configurazione dei
-servizi e non vengono passati al modello. I collegamenti pubblici ai prodotti
-o alle schede ufficiali possono invece comparire nei risultati. Il client applica timeout; i servizi applicano retry
-limitati agli errori transitori, evitando di ripetere richieste errate.
+Indirizzi interni e credenziali restano nella configurazione dei servizi,
+fuori dalla portata del modello; nei risultati compaiono solo i collegamenti
+pubblici ai prodotti o alle schede ufficiali. Il client applica timeout; i
+servizi ripetono le richieste solo per errori transitori.
 
 \section{Distribuzione tramite container}
 
@@ -653,71 +595,65 @@ La distribuzione comprende servizi applicativi e catalogo condiviso:
 
 \begin{enumerate}
     \item dashboard nativa (asset statici serviti dal backend);
-    \item Keycloak per OIDC e realm \texttt{pecilli};
+    \item Keycloak per l'autenticazione OIDC;
     \item backend FastAPI;
     \item server MCP GDACS;
     \item server MCP CEMS;
     \item Redis Stack;
-    \item NebulaGraph con metad, storaged, graphd e attivatore dello storage.
+    \item NebulaGraph con i suoi tre servizi e un passo di inizializzazione
+    dello storage.
 \end{enumerate}
 
-Il modello Ollama è raggiunto come dipendenza esterna. I server MCP sono
-visibili sulla rete interna; l'utente accede alla dashboard su
-\url{http://localhost:8080/dashboard} e, se attivato, al client legacy Open
-WebUI. Il backend dipende anche dal completamento dell'attivatore; le
-dipendenze usano condizioni di avvio e, per i servizi predisposti, health check. Il profilo
-\texttt{harvest} abilita job e schedulatori, mentre l'overlay
-\path{observability/docker-compose.observability.yml} aggiunge Prometheus,
-Grafana e Phoenix e avvia il backend con strumentazione. Liveness e readiness
-sono separate; un processo vivo ma privo di memoria non viene considerato pronto.
+Ollama è raggiunto come servizio esterno. I server MCP sono visibili solo sulla
+rete interna; l'utente accede alla dashboard dal browser e, se attivato, al
+client legacy Open WebUI. L'ordine di avvio è governato da dipendenze e, per i
+servizi predisposti, da health check. Configurazioni aggiuntive abilitano la
+raccolta notturna dei metadati e l'osservabilità (Prometheus, Grafana e
+Phoenix). Liveness e readiness sono separate: un processo attivo è pronto solo
+quando dispone della propria memoria.
 
 \begin{figure}[htbp]
 \centering
 \includegraphics[width=0.72\textwidth]{Images/screenshots/ui-keycloak-login.png}
-\caption{Schermata di accesso Keycloak al realm \texttt{pecilli}, intermedia
-fra il browser e la dashboard nativa.}
+\caption{Schermata di accesso Keycloak, intermedia fra il browser e la
+dashboard nativa.}
 \label{fig:ui-keycloak}
 \end{figure}
 
 \section{Sicurezza e osservabilità}
 
-Il prototipo prevede le seguenti misure per l'interfaccia e l'accesso alle
+Il prototipo adotta le seguenti misure per l'interfaccia e l'accesso alle
 fonti esterne:
 
 \begin{itemize}
     \item accesso all'interfaccia tramite Keycloak (OIDC) con ruoli applicativi;
     \item credenziali e URL remoti forniti tramite variabili d'ambiente;
-    \item validazione degli URL di dettaglio GDACS, limitati a host ufficiali;
-    \item schemi Pydantic per rifiutare forme non valide (non la correttezza
-    semantica di luogo o periodo);
-    \item nessuna azione distruttiva esposta dai tool MCP;
-    \item contenuti esterni trattati come dati, non come istruzioni;
+    \item URL di dettaglio GDACS limitati agli host ufficiali;
+    \item schemi Pydantic che verificano la forma dei dati;
+    \item tool MCP in sola lettura;
+    \item contenuti esterni trattati come dati, mai come istruzioni;
     \item filtraggio dei dati sensibili nei log applicativi;
-    \item correlazione fra risposta e log tramite
-    \texttt{request\_id}/\texttt{thread\_id} e header diagnostici.
+    \item identificativi di richiesta e di conversazione che collegano ogni
+    risposta ai relativi log.
 \end{itemize}
 
 Il prototipo è pensato per un ambiente di sviluppo e ha un limite di sicurezza
 esplicito: Keycloak protegge l'interfaccia, ma le API del backend non
-verificano il token né il proprietario dell'artefatto. Chi conosce
-l'identificativo di un artefatto può quindi leggerlo. Prima di un uso
-multiutente servono la verifica del token sulle API e il controllo del
-proprietario su conversazioni e artefatti.
+verificano ancora il token né il proprietario dell'artefatto, quindi chi conosce
+l'identificativo di un artefatto può leggerlo. Prima di un uso multiutente
+servono la verifica del token sulle API e il controllo del proprietario su
+conversazioni e artefatti.
 
-I log strutturati includono \texttt{request\_id}, \texttt{thread\_id},
-servizio, durata, codice di errore e possibilità di retry. Gli endpoint
-\url{/health/live}, \url{/health/ready} e
-\url{/health?deep=true} distinguono stato del processo, dipendenze
-obbligatorie e controlli remoti.
+I log strutturati registrano servizio, durata, codice di errore e possibilità
+di retry. Tre endpoint di salute distinguono lo stato del processo, le
+dipendenze obbligatorie e i controlli remoti.
 
-L'overlay osserva inoltre HTTP e SSE, workflow, nodi, chiamate LLM, tool MCP e
-repository del grafo. Prometheus conserva le metriche e Grafana le visualizza;
-OpenTelemetry esporta i trace a Phoenix. I trace possono catturare prompt e
-output secondo configurazione e limiti: la protezione dei log non implica
-l'assenza di contenuti nella telemetria. Il Capitolo~\ref{cap:6} descrive
-copertura, interpretazione e limiti di questo livello.
+L'osservabilità copre HTTP e SSE, workflow, nodi, chiamate LLM, tool MCP e
+accessi al grafo. Prometheus conserva le metriche e Grafana le visualizza;
+OpenTelemetry esporta i trace a Phoenix. I trace possono includere prompt e
+output, secondo configurazione. Il Capitolo~\ref{cap:6} descrive copertura,
+interpretazione e limiti di questo livello.
 
-Il vincolo trasversale dell'architettura riguarda i dati quantitativi: l'LLM può
-selezionare un percorso o proporre una vista, ma non costituisce mai la sorgente
-dei valori mostrati. Acquisizione, filtri, calcoli e validazione restano passaggi
-eseguiti dal codice sui record recuperati.
+Il principio trasversale dell'architettura riguarda i dati quantitativi: l'LLM
+seleziona un percorso o propone una vista, mentre acquisizione, filtri, calcoli
+e validazione sono eseguiti dal codice sui record recuperati.

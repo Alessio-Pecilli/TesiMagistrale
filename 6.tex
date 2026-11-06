@@ -1,35 +1,33 @@
-Una risposta corretta, un'esecuzione senza eccezioni e un servizio
+Una risposta corretta, un'esecuzione priva di eccezioni e un servizio
 raggiungibile sono proprietà distinte. Il livello di osservabilità permette di
 esaminare le ultime due e di ricostruire il percorso che ha prodotto la prima;
-la valutazione semantica richiede invece i riferimenti e i controlli del
+la valutazione semantica è invece affidata ai riferimenti e ai controlli del
 Capitolo~\ref{cap:7}. Questo capitolo descrive la strumentazione LLMOps del
-prototipo (Prometheus, Grafana, OpenTelemetry/Phoenix) e i suoi limiti
-operativi, con esempi ancorati alla guida tecnica del progetto
-\cite{guidaProgetto2026}.
+prototipo, basata su Prometheus, Grafana e OpenTelemetry/Phoenix, e il modo in
+cui i suoi dati vanno letti \cite{guidaProgetto2026}.
 
 \section{Log, metriche e trace}
 
 I log descrivono eventi puntuali, come un timeout o un nuovo tentativo. Le
-metriche riassumono quantità numeriche nel tempo, come numero di esecuzioni e
-distribuzione delle durate. Un trace collega invece le operazioni di una
-singola richiesta. Ciascuno span rappresenta un intervallo con attributi,
-eventuale errore e relazione con gli span padre e figli
+metriche riassumono quantità numeriche nel tempo, come il numero di esecuzioni
+e la distribuzione delle durate. Un trace collega le operazioni di una singola
+richiesta: ciascuno span rappresenta un intervallo con i suoi attributi,
+l'eventuale errore e la relazione con le operazioni che lo contengono
 \cite{otelTraces}.
 
-Queste rappresentazioni rispondono a domande complementari. Un aumento del p95
-segnala un gruppo di richieste lente; il trace individua il nodo coinvolto; il
-log può precisare l'errore remoto. L'assenza di eccezioni non stabilisce che il
-luogo interpretato sia corretto: una query valida sulla città sbagliata può
-terminare tecnicamente con successo.
+Le tre rappresentazioni rispondono a domande complementari. Un aumento delle
+durate segnala un gruppo di richieste lente, il trace individua il passaggio
+coinvolto e il log precisa l'errore. La correttezza del contenuto resta una
+questione separata: una ricerca valida sulla città sbagliata termina
+tecnicamente con successo.
 
 \section{Architettura della telemetria}
 
-Prometheus legge ogni 15 secondi l'endpoint \path{/metrics} del backend e
-conserva le serie temporali. Grafana interroga queste serie con PromQL.
-OpenTelemetry esporta invece gli span via OTLP/HTTP a Phoenix, che permette di
-esplorare l'albero della richiesta e le sessioni \cite{phoenixTracing}.
-Le convenzioni OpenInference caratterizzano span di agenti, modelli, strumenti
-e retrieval.
+Prometheus interroga il backend ogni 15 secondi e conserva le serie temporali
+delle metriche; Grafana le presenta in dashboard. OpenTelemetry invia invece i
+trace a Phoenix, che permette di esplorare il percorso di ogni richiesta e di
+raggruppare le richieste di una stessa conversazione \cite{phoenixTracing}.
+I due flussi sono rappresentati nella Figura~\ref{fig:telemetria}.
 
 \begin{figure}[htbp]
 \centering
@@ -62,125 +60,55 @@ agli alert Prometheus.}
 \label{fig:grafana-llmops}
 \end{figure}
 
-L'overlay \path{observability/docker-compose.observability.yml} aggiunge i
-servizi e seleziona l'entrypoint \texttt{copernicus\_llmops.asgi:app}, che
-importa e strumenta la stessa applicazione FastAPI. Le impostazioni documentate
-prevedono volumi persistenti e retention Prometheus di 15 giorni, configurabile.
-Non sono configurati un Collector OpenTelemetry intermedio, un archivio Loki o
-un Alertmanager per l'invio delle notifiche. I risultati del Judge restano in
-JSON e nella propria interfaccia: Phoenix e Prometheus non ne costituiscono
-l'archivio valutativo.
+L'osservabilità si attiva come estensione opzionale del deployment e
+strumenta la stessa applicazione, senza modificarne il codice. I dati sono
+conservati per 15 giorni. I risultati del Judge restano nei propri file e
+nella propria interfaccia, separati dalla telemetria operativa.
 
-\section{Strumentazione del backend}
+\section{Che cosa viene misurato}
 
-\subsection{Bootstrap e wrapper}
+La strumentazione avvolge le operazioni principali del backend, ne misura la
+durata e ne registra l'esito. Copre quattro livelli.
 
-Il pacchetto sotto \path{observability/llmops/src/copernicus_llmops/} separa
-bootstrap, middleware HTTP, metriche, tracing e strumentatori.
-\texttt{instrument\_app()} configura l'app prima della compilazione del
-workflow. I wrapper intercettano le operazioni originali, ne misurano la durata
-e ne conservano risultato ed errori. L'applicazione della strumentazione è
-idempotente, per evitare che un secondo bootstrap raddoppi i conteggi.
+\begin{itemize}
+    \item \textbf{Richieste HTTP e chat.} Per ogni richiesta sono registrati
+    stato e durata. Per la chat in streaming sono distinti il primo evento,
+    il primo contenuto testuale e la conclusione, perché un aggiornamento di
+    stato precede di solito la risposta vera e propria. L'esito finale
+    distingue completamento, errore, interruzione e disconnessione del client.
+    \item \textbf{Workflow e nodi.} Ogni esecuzione del workflow e ogni nodo
+    del grafo producono uno span con durata, esito e stadio logico (intento,
+    estrazione, orchestrazione, specialista, sintesi).
+    \item \textbf{Strumenti e catalogo.} Sono tracciate le chiamate agli
+    strumenti MCP e le query al catalogo a grafo, con il numero di risultati.
+    \item \textbf{Chiamate al modello.} Per ciascuna invocazione sono separati
+    il tempo d'attesa in coda, il tempo di inferenza e gli eventuali nuovi
+    tentativi; sono registrati anche i token in ingresso e in uscita forniti
+    dal server del modello \cite{ollamaUsage}, da cui si ricava la velocità di
+    generazione in token al secondo.
+\end{itemize}
 
-I nodi vengono avvolti alla registrazione con \texttt{StateGraph.add\_node()}.
-Un refactoring di nomi o firme può lasciare un wrapper non applicato: il
-bootstrap registra avvisi e prosegue con gli altri strumentatori. La
-disponibilità del backend non garantisce quindi la copertura completa della
-telemetria. I test del pacchetto verificano anche questi confini con un backend
-simulato.
+Il conteggio dei token rappresenta il consumo registrato dalle chiamate
+osservate, utile per confrontare agenti e periodi; il Judge usa un canale
+proprio ed è escluso da questo conteggio. Le durate degli span sono annidate:
+il tempo di un nodo è già compreso in quello del workflow che lo contiene.
 
-\subsection{HTTP, streaming e correlazione}
+\section{Come leggere le metriche}
 
-Il middleware ASGI misura stato e durata della richiesta fino alla conclusione
-del corpo. Usa il template della route, anziché creare una serie per ogni
-identificativo di artefatto. Prompt, ID di prodotto e trace ID non diventano
-etichette Prometheus: una cardinalità elevata moltiplicherebbe inutilmente le
-serie. Quando viene aperto uno span radice, l'header \texttt{X-Trace-ID}
-permette di ritrovarlo in Phoenix.
+Prometheus usa tre tipi di misura: i contatori, che crescono nel tempo (per
+esempio il numero di richieste); i gauge, che indicano un valore corrente (per
+esempio le chiamate in corso); gli istogrammi, che raggruppano le durate in
+fasce e permettono di stimarne la distribuzione \cite{prometheusHistograms}.
+I valori per periodo mostrati in dashboard sono stime ricavate da queste serie.
 
-Per SSE vengono distinti primo evento, primo contenuto e conclusione dello
-stream. Un aggiornamento di stato non è ancora una risposta linguistica; un
-HTTP 200 iniziale può precedere un errore applicativo. Gli esiti separano
-\texttt{completed}, \texttt{error}, \texttt{client\_disconnected} e
-\texttt{interrupted}.
+Per le durate la dashboard riporta due percentili. Il p50, o mediana, è la
+durata entro cui si conclude metà delle richieste. Il p95 è la durata entro cui
+si conclude il 95\% delle richieste: descrive le richieste più lente senza
+farsi dominare da un singolo caso estremo. È quindi un indicatore di
+reattività, distinto sia dalla durata massima sia dalla qualità della risposta,
+e diventa affidabile quando il numero di campioni è sufficiente.
 
-I pannelli della chat considerano solo le conversazioni degli utenti: un
-benchmark produce workflow e chiamate LLM osservate, ma non campioni di prima
-risposta della chat.
-
-\subsection{Workflow, nodi e dipendenze}
-
-Gli strumentatori avvolgono i percorsi \texttt{WorkflowAgent.\_invoke()} e
-\texttt{astream()}, registrando durata ed esiti \texttt{ok}, \texttt{error}
-o \texttt{cancelled}. Il contatore del workflow cresce alla conclusione. Gli
-span dei nodi riportano input/output sintetici e uno stadio logico: intento,
-estrazione, orchestrazione, specialista o sintesi. Le eccezioni di controllo
-del grafo vengono distinte dai guasti ordinari.
-
-Sono osservate anche le chiamate ai tool MCP e le query al catalogo a grafo,
-con la query eseguita e il numero di righe restituite. Il campo \texttt{session.id}, derivato dal thread, raggruppa in Phoenix più
-richieste della stessa conversazione. Non le trasforma in un unico trace
-indefinito. Gli span figli includono tempo già compreso nei padri: una durata
-del workflow di 30 secondi con un figlio di 25 non corrisponde a 55 secondi.
-
-\subsection{Invocazioni LLM, attesa e token}
-
-Per il modello vengono distinti invocazione logica, attesa dello slot di
-concorrenza e tentativi HTTP. La durata logica comprende coda e retry; tre
-tentativi per la stessa invocazione producono due retry. Un numero elevato di
-chiamate in corso può comprendere richieste in coda e non implica altrettante
-inferenze simultanee.
-
-I conteggi dei token provengono dai campi Ollama \path{prompt_eval_count}
-ed \path{eval_count} del corpo catturato. Ollama esprime le durate in
-nanosecondi \cite{ollamaUsage}. Per una durata positiva, la velocità di
-generazione della singola chiamata in token al secondo è quindi:
-\[
- v_{\mathrm{output}}=
- \frac{10^9\,\texttt{eval\_count}}{\texttt{eval\_duration}}.
-\]
-Se durata o conteggio non sono disponibili, la misura non può essere
-ricostruita. Il tasso di output registrato per agente in una
-finestra comprende invece anche i periodi senza attività. Le due quantità
-possono avere unità token/s e significati diversi.
-
-La somma di \texttt{load\_duration} e \texttt{prompt\_eval\_duration}
-fornisce una stima della preparazione al primo token del modello. Poiché la
-chiamata osservata è senza streaming, non è una misura del primo token
-ricevuto sul socket. Anche il tempo alla prima risposta della chat è distinto:
-nel backend descritto il contenuto finale viene consegnato soprattutto alla
-fine dell'elaborazione, dopo gli aggiornamenti di stato.
-
-Il Judge utilizza un proprio trasporto e resta escluso dalla contabilizzazione
-LLM di questo pacchetto. Inoltre i tentativi falliti senza corpo valido possono
-non produrre conteggi di token. La misura esprime il consumo registrato, non una
-contabilità completa di tutto il calcolo o un costo monetario.
-
-\section{Interpretazione delle metriche}
-
-\subsection{Contatori, gauge e istogrammi}
-
-Un counter descrive un totale cumulativo dall'inizializzazione del processo;
-un gauge un valore corrente, come le invocazioni in corso. Un istogramma
-conserva conteggio, somma e bucket cumulativi delle osservazioni. Le stime dei
-quantili derivano da questi bucket, anziché dall'elenco integrale delle durate
-\cite{prometheusHistograms}.
-
-Per stimare gli eventi in un periodo la dashboard usa \texttt{increase}; per
-il ritmo medio al secondo usa \texttt{rate}. La prima corregge reset ed
-estrapola ai margini dell'intervallo: può restituire quantità non intere.
-Un valore stimato di 14,08 workflow non indica una frazione di esecuzione
-realmente avvenuta.
-
-Il p50 descrive la mediana; il p95 una soglia sotto cui rientra circa il 95\%
-della distribuzione stimata. Non è il massimo né un indice di qualità. Con
-pochi campioni o durate oltre il bucket finito più alto, la stima perde forza
-interpretativa. Il p95 delle durate è inoltre distinto dall'intervallo di
-confidenza al 95\% del benchmark.
-
-\subsection{Popolazioni e denominatori}
-
-La dashboard distingue rapporti con popolazioni differenti:
+La dashboard calcola due tassi di successo su popolazioni diverse:
 \[
  r_{\mathrm{workflow}} =
  \frac{N_{\mathrm{ok}}}{N_{\mathrm{ok}}+N_{\mathrm{error}}},
@@ -189,30 +117,17 @@ La dashboard distingue rapporti con popolazioni differenti:
  \frac{N_{\mathrm{completed}}}
  {N_{\mathrm{completed}}+N_{\mathrm{error}}+N_{\mathrm{interrupted}}}.
 \]
-Il primo esclude le cancellazioni, il secondo le disconnessioni del client.
-Queste esclusioni vanno lette insieme alle tabelle degli esiti; non provano che
-gli abbandoni siano irrilevanti per l'esperienza utente. Se manca un denominatore
-positivo, il rapporto resta assente. Zero osservato, assenza di attività e
-assenza di campioni sono condizioni diverse.
-
-Il tempo cumulato dei nodi somma attese e I/O di più esecuzioni. Due nodi da
-10 secondi in parallelo possono contribuire 20 secondi cumulati a un workflow
-di circa 10 secondi. Non si tratta di consumo CPU né di una scomposizione
-esclusiva della latenza. Anche i p95 di coda e chiamata completa appartengono a
-distribuzioni diverse e non si sottraggono per ricostruire una chiamata tipica.
+Il primo esclude le esecuzioni annullate, il secondo le disconnessioni del
+client; entrambi vanno letti insieme alle tabelle degli esiti. In assenza di
+traffico il rapporto resta vuoto, condizione distinta da un tasso pari a zero.
 
 \section{Dashboard Grafana e alert}
 
-La configurazione durevole della dashboard è costruita da
-\path{observability/grafana/build_dashboard.py}, che genera il JSON con
-pannelli, query, unità, descrizioni e soglie. Il provisioning carica sorgente
-Prometheus e dashboard dai file \cite{grafanaProvisioning}. Una modifica
-effettuata soltanto nel browser può essere sovrascritta dal provisioning.
-
-La dashboard è organizzata in sezioni tematiche. Una guida
-espandibile spiega unità, p50/p95, token, coda ed esiti; un promemoria sui
-percentili rimane visibile. Le sezioni operative sono riassunte nella
-Tabella~\ref{tab:viste-osservabilita}.
+La dashboard è generata da uno script e caricata automaticamente all'avvio
+\cite{grafanaProvisioning}: la versione nel repository è quella di
+riferimento. È organizzata in sezioni tematiche, riassunte nella
+Tabella~\ref{tab:viste-osservabilita}, e include una guida espandibile che
+spiega unità di misura, percentili, token ed esiti.
 
 \begin{table}[htbp]
 \centering
@@ -220,32 +135,33 @@ Tabella~\ref{tab:viste-osservabilita}.
 \begin{tabularx}{\textwidth}{>{\bfseries\raggedright\arraybackslash}p{0.25\textwidth}
     >{\raggedright\arraybackslash}X}
 \toprule
-Sezione & Domanda diagnostica e misure \\
+Sezione & Domanda a cui risponde \\
 \midrule
-Panoramica & Raccolta recente, alert, esecuzioni concluse, esito tecnico e
-durate p50/p95. \\
+Panoramica & Il sistema sta raccogliendo dati? Quante richieste riescono e in
+quanto tempo? \\
 \addlinespace
-Diagnosi & Origine degli errori, confronto delle latenze LLM, nodi più lenti e
-dipendenze MCP/GraphDB. \\
+Diagnosi & Da dove vengono gli errori? Quali nodi e servizi esterni sono più
+lenti? \\
 \addlinespace
-LLM & Invocazioni attive, campioni, coda, inferenza, caricamenti oltre un
-secondo, retry e token per agente. \\
+LLM & Quante chiamate al modello sono attive o in coda? Quanti tentativi e
+quanti token per agente? \\
 \addlinespace
-Chat SSE & Stream aperti, completamento, primo evento, prima risposta ed esiti
-delle route di chat. \\
+Chat & Quanto tempo passa prima della prima risposta? Come si concludono le
+conversazioni? \\
 \addlinespace
-HTTP, token e stadi & Freschezza dello scrape, traffico per route, output
-contabilizzato, tempo cumulato e quota 5xx. \\
+HTTP e stadi & Quanto traffico riceve ogni servizio e quanti errori del
+server produce? \\
 \bottomrule
 \end{tabularx}
 \caption{Sezioni principali della dashboard, affiancate dalla guida alle metriche.}
 \label{tab:viste-osservabilita}
 \end{table}
 
-Il filtro modello riguarda le serie LLM, mentre workflow e dipendenze restano
-globali. Le curve usano spesso una finestra mobile diversa dall'intero periodo
-della pagina: un p95 finale della curva e quello della tabella possono
-differire. Il controllo di raccolta deve precedere la lettura di uno storico.
+I filtri permettono di restringere le viste per tipo di richiesta, esito,
+modello o agente (Figura~\ref{fig:grafana-filtri}); la sezione dedicata al
+modello è mostrata nella Figura~\ref{fig:grafana-llm}. Prima di leggere uno
+storico conviene controllare l'indicatore di raccolta, che segnala se i dati
+sono aggiornati.
 
 \begin{figure}[htbp]
 \centering
@@ -264,44 +180,35 @@ salute delle invocazioni al modello.}
 \label{fig:grafana-llm}
 \end{figure}
 
-Le regole Prometheus includono \texttt{BackendDown}, errori HTTP, stream
-falliti, prima risposta lenta, coda Ollama, caricamenti e guasti tool. Una
-condizione può diventare \texttt{pending} e poi \texttt{firing} dopo la durata
-\texttt{for}. La finestra su cui si calcola una misura e la persistenza
-richiesta all'alert sono due intervalli distinti. Senza Alertmanager e
-destinatari configurati, lo stato firing non implica l'invio di una notifica.
+Le regole di alert coprono backend irraggiungibile, errori HTTP, stream
+falliti, prima risposta lenta, coda del modello e guasti degli strumenti. Un
+alert scatta quando la condizione persiste per un intervallo prefissato. Gli
+alert sono visibili in Prometheus e in Grafana; nel prototipo manca un canale
+di notifica verso persone o sistemi esterni.
 
-\section{Diagnosi e limiti della copertura}
+\section{Diagnosi e copertura}
 
-Per una richiesta lenta occorre controllare raccolta recente e campioni, poi
-durata del workflow, nodi, coda, retry e dipendenze. Coda alta con inferenza
-stabile sostiene l'ipotesi di attesa per lo slot; un nodo lento con chiamate LLM
-brevi orienta verso altri passaggi. Il trace permette di verificare queste
-ipotesi sul percorso critico, mentre i log precisano gli errori.
+Quando una richiesta è lenta, il percorso di analisi parte dalla panoramica
+(raccolta attiva, numero di campioni) e scende verso workflow, nodi, coda del
+modello, tentativi e servizi esterni. Una coda lunga con inferenza stabile
+indica attesa per il modello; un nodo lento con chiamate al modello brevi
+orienta verso altri passaggi. Il trace della richiesta conferma l'ipotesi
+mostrando dove si concentra il tempo, e i log precisano gli errori.
 
-Per una risposta errata il confronto riguarda domanda, output del parser,
-query, record e artefatto. Gli indicatori tecnici possono essere verdi anche
-quando il luogo è sbagliato. Il benchmark controlla il workflow, ma l'accordo
-fra risposta, tabella e mappa renderizzate richiede una prova dell'interfaccia.
+Quando una risposta è sbagliata, il confronto riguarda domanda, luogo
+interpretato, query, record restituiti e artefatto finale. Qui gli indicatori
+tecnici possono risultare tutti positivi: la verifica del contenuto spetta al
+benchmark e, per tabella e mappa, a una prova dell'interfaccia.
 
-Non sono misurati direttamente utilizzo GPU/VRAM, risorse di ogni container o
-accuratezza semantica. I trasporti CDSE STAC, ricerca web e Judge non hanno
-strumentatori dedicati nel pacchetto descritto: il tempo può apparire nel nodo
-che li contiene, senza dettaglio della singola chiamata. Una dipendenza assente
-dalla tabella dei tool non è per questo inutilizzata.
+La copertura riguarda tempi, esiti e consumo di token. Restano fuori l'uso
+della GPU, le risorse dei singoli container e l'accuratezza semantica; alcune
+dipendenze, come il catalogo STAC, la ricerca web e il Judge, compaiono solo
+attraverso il tempo del nodo che le invoca. I trace possono inoltre registrare
+prompt e risposte: la cattura del contenuto è configurabile e limitata in
+lunghezza, ma va considerata un dato potenzialmente sensibile.
 
-La cattura di contenuto può registrare prompt, risposte e stato sintetico.
-Il flag \texttt{LLMOPS\_CAPTURE\_CONTENT} e il limite predefinito di 8.000
-caratteri agiscono nei percorsi che li rispettano; filtraggio e troncamento non
-costituiscono una bonifica universale di ogni attributo. La valutazione di un
-trace deve considerare anche le evidenze omesse o sintetizzate.
-
-La ricognizione del 15 ottobre 2026 offre un esempio del valore di questi
-distinguo: Grafana e Prometheus erano disponibili, ma il target backend aveva
-\texttt{up=0} con un errore di risoluzione del nome Docker e
-\texttt{BackendDown} attivo. Grafana conservava comunque dati storici; Phoenix
-serviva la pagina senza che ciò provasse l'arrivo di nuovi trace. Anche la
-connessione locale a NebulaGraph era rifiutata \cite{guidaProgetto2026}.
-Questa fotografia documentata non è una diagnosi permanente: mostra perché
-presenza di grafici, salute corrente e correttezza dei risultati debbano essere
-verificate separatamente.
+La ricognizione del 15 ottobre 2026 illustra questi aspetti: Grafana mostrava
+ancora i dati storici mentre Prometheus segnalava il backend irraggiungibile,
+con l'alert corrispondente attivo \cite{guidaProgetto2026}. La presenza di
+grafici, la salute corrente del servizio e la correttezza dei risultati vanno
+quindi verificate separatamente.

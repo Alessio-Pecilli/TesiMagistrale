@@ -14,10 +14,8 @@ a strumenti e risorse esterne \cite{mcpSpec}; la proposta originaria insiste in
 particolare sulla riusabilità delle integrazioni tra host differenti
 \cite{anthropicMCP}.
 
-Di MCP viene considerato soprattutto il percorso effettivamente usato: host,
-client, server e invocazione dei tool. I due server realizzati non espongono
-resources o prompts; queste capacità sono richiamate soltanto per distinguere il
-perimetro del prototipo da quello della specifica.
+Il capitolo si concentra sul percorso effettivamente usato nel progetto: host,
+client, server e invocazione dei tool.
 
 MCP propone un modello client-server. L'applicazione IA agisce come host: contiene o coordina il modello, presenta l'interfaccia utente e gestisce le policy. Al suo interno usa uno o più client MCP per connettersi a server MCP. Ogni server espone capacità specifiche: strumenti, risorse o prompt. L'agente può scoprire queste capacità e usarle attraverso messaggi standardizzati.
 
@@ -31,12 +29,12 @@ fornisce l'interfaccia con l'utente (Open WebUI resta un client legacy
 opzionale).
 
 È l'host a scegliere quali capacità mostrare al modello. Nel progetto la scelta è
-ristretta a operazioni di consultazione; nessun server MCP espone scritture o
-comandi sul sistema.
+ristretta a operazioni di consultazione: i server MCP offrono soltanto letture e
+ricerche.
 
 \subsection{Client}
 
-Il client MCP è il componente che mantiene la connessione con un server. In molte architetture l'utente non lo vede: è una parte interna dell'host. Il client si occupa di inizializzare la sessione, negoziare capacità, inviare richieste e ricevere risposte.
+Il client MCP è il componente che mantiene la connessione con un server. In molte architetture è una parte interna dell'host, invisibile all'utente. Il client si occupa di inizializzare la sessione, negoziare capacità, inviare richieste e ricevere risposte.
 
 Se l'host usa più server, mantiene più connessioni. Il backend sviluppato in
 questa tesi utilizza un client comune e apre una sessione distinta per GDACS e
@@ -51,17 +49,16 @@ Il server MCP espone funzionalità a cui l'agente può accedere. Può essere loc
     \item \textbf{prompts}, cioè template o procedure testuali riusabili.
 \end{itemize}
 
-La distinzione separa dati, azioni e istruzioni riutilizzabili. Nel progetto la
-scelta è più circoscritta: i server GDACS e CEMS espongono azioni di lettura e
-ricerca come tool e non pubblicano resources o prompts.
+La distinzione separa dati, azioni e istruzioni riutilizzabili. Nel progetto i
+server GDACS e CEMS usano soltanto la prima categoria: espongono come tool le
+azioni di lettura e ricerca.
 
 \subsection{Trasporto e messaggi}
 
 MCP usa messaggi JSON-RPC e mantiene il formato logico separato dal trasporto
-\cite{mcpSpec}. La specifica prevede, tra gli altri, processi locali collegati via
-\texttt{stdio} e server raggiunti via HTTP. I servizi GDACS e CEMS del progetto
-sono container autonomi e comunicano con il backend mediante Streamable HTTP;
-la modalità \texttt{stdio} non è utilizzata.
+\cite{mcpSpec}. La specifica prevede, tra gli altri, processi locali collegati
+tramite standard input/output e server raggiunti via HTTP. I servizi GDACS e CEMS
+del progetto sono container autonomi e comunicano con il backend via HTTP.
 
 \section{Capacità esposte dai server}
 
@@ -77,51 +74,50 @@ output: lista normalizzata di eventi GDACS
 \end{verbatim}
 
 Descrizione e schema costituiscono le informazioni sulle quali il modello basa
-la scelta del tool e dei relativi parametri. Ambiguità nel contratto si
-riflettono quindi direttamente sulla qualità delle invocazioni.
+la scelta del tool e dei relativi parametri. Un contratto chiaro si traduce
+quindi direttamente in invocazioni più corrette.
 
 Nel prototipo ogni tool corrisponde a un'operazione della sorgente, accetta un
 input validato e restituisce errori classificabili. Contratti circoscritti
-rendono inoltre possibile provare parsing e gestione dei guasti senza coinvolgere
-il modello linguistico.
+permettono inoltre di provare parsing e gestione dei guasti separatamente dal
+modello linguistico.
 
-\subsection{Capacità non utilizzate nel prototipo}
+\subsection{Resources e prompts}
 
 Una resource rende leggibile un contenuto indirizzabile, di norma identificato da
 un URI, mentre i prompts sono template testuali per interazioni ricorrenti. La
 prima descrive un dato da recuperare; i secondi forniscono all'host una procedura
-o un'istruzione parametrica. Entrambe le capacità appartengono alla specifica,
-ma non entrano nel flusso realizzato per GDACS e CEMS.
+o un'istruzione parametrica. Entrambe le capacità fanno parte della specifica; il
+flusso realizzato per GDACS e CEMS si basa sui soli tool.
 
 \section{Uso di MCP nel workflow}
 
-Nel progetto i client scoprono i tool all'apertura della sessione. Il workflow non
-li presenta tutti indiscriminatamente al modello: il ramo selezionato determina
-il server e il router specializzato sceglie l'operazione. Dopo la validazione
-degli argomenti, il client invia la richiesta e il risultato normalizzato rientra
-nello stato LangGraph. La selezione è quindi distribuita fra decisione del
-modello e vincoli del grafo.
+Nel progetto i client scoprono i tool all'apertura della sessione. Il ramo
+selezionato determina il server e il router specializzato sceglie l'operazione,
+così il modello vede solo i tool pertinenti. Dopo la validazione degli argomenti,
+il client invia la richiesta e il risultato normalizzato rientra nello stato
+LangGraph. La selezione è quindi distribuita fra decisione del modello e vincoli
+del grafo.
 
-Quando l'orchestratore seleziona GDACS, il backend non costruisce direttamente
-l'URL del feed. Il client MCP invia i parametri normalizzati al tool scelto e
-riceve una risposta strutturata. Il server si occupa della richiesta HTTP, del
-parsing XML e degli errori della sorgente; il workflow vede soltanto il contratto
-del tool. Lo stesso schema è usato per le attivazioni Copernicus EMS. MCP non
-sostituisce quindi le API remote, ma ne isola i dettagli dal resto
-dell'applicazione.
+Quando l'orchestratore seleziona GDACS, il client MCP invia i parametri
+normalizzati al tool scelto e riceve una risposta strutturata. Il server si
+occupa della richiesta HTTP, del parsing XML e degli errori della sorgente; il
+workflow vede soltanto il contratto del tool. Lo stesso schema è usato per le
+attivazioni Copernicus EMS. MCP affianca quindi le API remote e ne isola i
+dettagli dal resto dell'applicazione.
 
 \section{Confronto e limiti}
 
 \subsection{Integrazione diretta}
 
-MCP non elimina le API custom. Un server MCP, internamente, può chiamare qualunque API: REST, GraphQL, database SQL, SDK proprietari, comandi locali. La differenza è che verso l'applicazione IA espone un'interfaccia uniforme.
+Un server MCP, internamente, può chiamare qualunque API: REST, GraphQL, database SQL, SDK proprietari, comandi locali. Verso l'applicazione IA, invece, espone un'interfaccia uniforme.
 
 Rispetto a un'integrazione collocata interamente nel backend, il costo aggiuntivo
 è la gestione di sessioni, trasporto e processi separati. In cambio, parsing XML
 di GDACS e accesso a CEMS restano confinati nei rispettivi servizi. Il client
 STAC, mantenuto direttamente nel backend, offre un termine di confronto concreto:
-è più semplice da eseguire, ma rende il package applicativo responsabile dello
-schema e degli errori dell'API remota.
+è più semplice da eseguire, ma rende il backend responsabile dello schema e degli
+errori dell'API remota.
 
 \subsection{Tool calling}
 
@@ -130,61 +126,58 @@ rende disponibili al modello. MCP opera tra l'host e server separati, dai quali
 quelle funzioni possono essere scoperte. L'host può quindi presentare al modello
 un tool ottenuto da un server MCP e tradurre l'invocazione nella corrispondente
 richiesta di protocollo. I due meccanismi intervengono in punti diversi della
-stessa catena e non costituiscono soluzioni alternative.
+stessa catena e sono complementari.
 
 \subsection{Costi introdotti}
 
-MCP non uniforma la semantica delle sorgenti: eventi GDACS e attivazioni CEMS
-continuano ad avere campi, tempi di aggiornamento e condizioni di errore diversi.
-Introduce inoltre due servizi da distribuire e monitorare. Per un prototipo con
+Ogni sorgente conserva la propria semantica: eventi GDACS e attivazioni CEMS
+hanno campi, tempi di aggiornamento e condizioni di errore diversi. MCP
+introduce inoltre due servizi da distribuire e monitorare. Per un prototipo con
 poche funzioni tale costo è visibile; il vantaggio sta nel poter modificare una
-sorgente senza trasferirne parsing e dipendenze nel workflow.
+sorgente lasciando parsing e dipendenze fuori dal workflow.
 
 \section{Sicurezza e gestione operativa}
 
 \subsection{Autenticazione e autorizzazione}
 
-Un protocollo di integrazione non definisce da solo il modello di sicurezza
-dell'applicazione. Avvio dei server, accesso ai dati, gestione delle credenziali
-e revoca dei permessi rimangono responsabilità dell'host e dell'infrastruttura.
+Avvio dei server, accesso ai dati, gestione delle credenziali e revoca dei
+permessi sono responsabilità dell'host e dell'infrastruttura, più che del
+protocollo di integrazione.
 
 I server sono raggiungibili sulla rete interna dei container e ricevono
 configurazione e credenziali dall'ambiente. Il server stabilisce le operazioni
 disponibili; il workflow limita ulteriormente quelle invocabili nel ramo
-corrente. Poiché tutti i tool sono di sola lettura, il prototipo non implementa
-un flusso di conferma per azioni irreversibili.
+corrente. Poiché tutti i tool sono di sola lettura, il prototipo può fare a meno
+di un flusso di conferma per azioni irreversibili.
 
-\subsection{Prompt injection e dati non fidati}
+\subsection{Prompt injection e dati esterni}
 
 Feed e pagine web possono contenere testo che contraddice le istruzioni
-dell'applicazione. I contenuti recuperati vengono inseriti come dati e non
-determinano quali tool siano disponibili: piano, allowlist degli URL GDACS e
-schemi di output sono controllati dal codice. La separazione riduce la superficie
-d'attacco, senza costituire da sola una garanzia contro ogni forma di prompt
-injection.
+dell'applicazione. I contenuti recuperati vengono trattati come dati, mentre
+piano, tool disponibili, elenco degli indirizzi GDACS ammessi e schemi di output
+sono controllati dal codice. Questa separazione riduce la superficie d'attacco,
+pur senza escludere ogni forma di prompt injection.
 
 \subsection{Osservabilità}
 
 Il client registra servizio, durata, esito e codice diagnostico delle chiamate,
-senza includere credenziali o prompt completi. MCP rende uniforme il punto nel
-quale acquisire queste informazioni, ma log e metriche sono implementati
-dall'applicazione e non dal protocollo.
+omettendo credenziali e prompt completi. MCP offre un punto uniforme nel quale
+raccogliere queste informazioni, mentre log e metriche sono implementati
+dall'applicazione.
 
 \section{Criteri adottati nel progetto}
 
 I tool implementati sono piccoli, di sola lettura e dotati di schemi di input
 espliciti. Le credenziali e gli indirizzi interni dei servizi restano nella
-configurazione applicativa. I risultati possono invece includere URL pubblici
-delle risorse, identificativi e timestamp necessari alla verifica: il divieto
-di esporre credenziali non implica l'assenza di collegamenti nel contesto. I test dei client coprono risposte vuote,
-payload non validi, timeout e codici HTTP transitori. Queste proprietà non
-derivano automaticamente dall'adozione di MCP, ma dalla progettazione dei
-singoli server e dell'host.
+configurazione applicativa. I risultati includono invece URL pubblici delle
+risorse, identificativi e timestamp utili alla verifica. I test dei client
+coprono risposte vuote, payload malformati, timeout ed errori HTTP temporanei.
+Queste proprietà derivano dalla progettazione dei singoli server e dell'host,
+più che dall'adozione di MCP in sé.
 
 Nel sistema proposto MCP ha un compito delimitato: separa i servizi GDACS
 e Copernicus EMS dal backend agentico e offre un'interfaccia uniforme per
-scoprirne e invocarne i tool. Il catalogo satellitare STAC live, usato per
-acquisizioni e heatmap nel workspace, resta un'integrazione diretta. Anche la
-Discovery usa un client Nebula e repository applicativi, senza passare da MCP.
-La presenza di entrambi gli approcci motiva MCP come scelta architetturale
-concreta, senza attribuirgli proprietà che dipendono dall'applicazione.
+scoprirne e invocarne i tool. Il catalogo satellitare STAC, usato per
+acquisizioni e heatmap nel workspace, resta un'integrazione diretta, così come
+l'accesso della Discovery al catalogo NebulaGraph. La convivenza dei due
+approcci mostra in concreto quando MCP conviene come scelta architetturale.

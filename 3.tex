@@ -1,11 +1,12 @@
 Il progetto integra fonti operative e cataloghi tematici Copernicus. GDACS,
 CDSE/STAC e CEMS On-demand Mapping descrivono eventi e allerte, acquisizioni
 satellitari e attivazioni cartografiche di emergenza. Marine e Drought ampliano
-la scoperta di risorse attraverso un catalogo di metadati a grafo. Confonderle
-porterebbe a interpretare in modo errato i risultati; una heatmap di acquisizioni,
-per esempio, non misura l'intensità di un disastro. Il capitolo chiarisce quindi
-contenuto, modalità di accesso e limiti di ciascuna fonte prima di esaminare
-l'architettura che le combina.
+la scoperta di risorse attraverso un catalogo di metadati a grafo. Ogni fonte
+risponde a una domanda diversa: una heatmap di acquisizioni, per esempio, mostra
+dove si concentrano le immagini disponibili, mentre una prima stima dell'impatto di un
+disastro viene dalle allerte GDACS. Il capitolo descrive quindi contenuto, modalità di
+accesso e limiti di ciascuna fonte prima di esaminare l'architettura che le
+combina.
 
 \section{GDACS}
 
@@ -40,11 +41,9 @@ incendi. I record disponibili contengono normalmente:
 \end{itemize}
 
 I livelli verde, arancione e rosso esprimono una stima crescente dell'impatto e
-della rilevanza internazionale. Non devono essere interpretati come una semplice
-misura fisica del fenomeno. Per un terremoto, ad esempio, il livello considera
-anche esposizione, vulnerabilità e capacità di risposta; una magnitudo elevata
-in un'area poco popolata non equivale automaticamente a un impatto umanitario
-elevato.
+della rilevanza internazionale. Oltre alla misura fisica del fenomeno, il livello
+considera esposizione, vulnerabilità e capacità di risposta: un forte terremoto
+in un'area poco popolata può quindi ricevere un'allerta bassa.
 
 \subsection{Accesso programmatico}
 
@@ -55,21 +54,19 @@ tipologia di evento; la documentazione indica, ad esempio, feed relativi alle
 ultime 24 ore, all'ultima settimana e a specifiche soglie per i terremoti
 \cite{gdacsFeeds}.
 
-Nel progetto il feed viene interrogato da un servizio MCP autonomo. Il servizio
-normalizza il contenuto XML e restituisce oggetti strutturati. Il backend non
-espone direttamente il feed al modello linguistico: l'agente riceve invece un
-contratto stabile e filtra i record per luogo, periodo, tipo di evento e, quando
-richiesto, soglie quantitative.
+Nel progetto il feed viene interrogato da un servizio MCP autonomo, che
+normalizza il contenuto XML e restituisce oggetti strutturati. L'agente riceve
+così un contratto stabile e filtra i record per luogo, periodo, tipo di evento
+e, quando richiesto, soglie quantitative.
 
 \subsection{Limiti}
 
 Una notifica GDACS è una stima rapida e può cambiare quando arrivano nuovi
-dati. Non sostituisce le autorità locali, una valutazione sul campo o un
-bollettino ufficiale di protezione civile. Alcuni processi sono automatici,
-altri includono dati e valutazioni provenienti da istituzioni o fonti esterne.
-Per questo il progetto conserva link, timestamp e identificativi: la risposta
-dell'agente deve restare verificabile e non presentare una stima preliminare
-come un dato definitivo.
+dati; le valutazioni sul campo e i bollettini ufficiali di protezione civile
+restano il riferimento definitivo. Alcuni processi sono automatici, altri
+includono dati e valutazioni provenienti da istituzioni o fonti esterne. Per
+questo il progetto conserva link, timestamp e identificativi: ogni risposta
+dell'agente resta verificabile e presenta le stime preliminari come tali.
 
 \section{Il programma Copernicus}
 
@@ -118,28 +115,22 @@ standardizzato \cite{cdseStac}.
 
 \subsection{Dal metadato alla heatmap}
 
-Il ramo STAC del progetto non esegue una classificazione scientifica delle
-immagini e non produce una mappa dei danni. Recupera invece i metadati delle
-acquisizioni che intersecano luogo e periodo richiesti. STAC distingue
-\texttt{bbox} e \texttt{geometry}: nel percorso visuale descritto si usa la bounding box del prodotto
-(rettangolo), se ne calcola il centro e si costruisce:
+Il ramo STAC del progetto lavora sui metadati: recupera le acquisizioni che
+intersecano luogo e periodo richiesti, senza analizzare il contenuto delle
+immagini. Di ogni prodotto si usa il rettangolo che lo racchiude (bounding box),
+se ne calcola il centro e si costruisce:
 
 \begin{itemize}
-    \item una heatmap della densità dei centri delle bounding box dei
-    risultati recuperati (non della copertura areale né dell'intensità del
-    fenomeno);
+    \item una heatmap che mostra dove si concentrano le acquisizioni recuperate;
     \item i rettangoli delle bounding box, selezionabili;
     \item un pannello con identificativo, collezione, data, piattaforma,
     copertura nuvolosa, asset e collegamenti disponibili.
 \end{itemize}
 
-I KPI di conteggio si riferiscono agli \emph{item} STAC restituiti dalla
-ricerca (metadati di prodotto). Un item può rappresentare un prodotto relativo
-a un tile: il conteggio non deduplica implicitamente livelli di elaborazione
-o prodotti della stessa acquisizione fisica e non misura osservazioni
-scientifiche derivate. La visualizzazione non misura la
-severità del disastro né la frazione di territorio effettivamente coperta
-dalle geometrie precise degli Item.
+I conteggi mostrati si riferiscono ai prodotti restituiti dalla ricerca: più
+prodotti possono derivare dalla stessa ripresa satellitare, ad esempio a
+diversi livelli di elaborazione. La visualizzazione descrive quindi la
+disponibilità di dati sull'area, come punto di partenza per analisi successive.
 
 \section{Copernicus Emergency Management Service}
 
@@ -179,41 +170,38 @@ del progetto \cite{guidaProgetto2026}.
 
 \subsection{Metadati Marine}
 
-Il collector Marine legge il catalogo con
-\path{copernicusmarine.describe(show_all_versions=True)}. Conserva la
-gerarchia tra prodotto, dataset, versione, parte e servizio di accesso, oltre a
-variabili e coordinate. Una variabile può essere descritta mediante nome,
-\emph{standard name}, unità e descrizione; gli assi mediante estremi, passo e
-numero di valori. Gli array completi delle coordinate vengono esclusi.
+Il collector Marine legge il catalogo completo di Copernicus Marine, comprese
+le versioni precedenti dei dataset. Conserva la gerarchia tra prodotto,
+dataset, versione, parte e servizio di accesso, oltre a variabili e coordinate.
+Una variabile è descritta da nome, nome standard, unità e descrizione; gli assi
+da estremi, passo e numero di valori, senza memorizzare i valori completi.
 
-Un secondo collector ispeziona le funzioni pubbliche dell'SDK per documentare
-operazioni e parametri. Il catalogo può quindi associare una risorsa alle
-modalità con cui sarebbe selezionabile. Registrare l'operazione
-\texttt{subset} descrive una possibilità di accesso; l'harvester non la invoca
-per acquisire i file scientifici.
+Un secondo collector documenta le operazioni offerte dalla libreria ufficiale
+di Copernicus Marine e i relativi parametri. Il catalogo può così indicare,
+per ogni risorsa, le modalità con cui sarebbe possibile estrarne una porzione;
+l'harvester registra queste possibilità senza scaricare i file
+scientifici.
 
 \subsection{Metadati Drought}
 
-Il collector Drought consulta \texttt{GetCapabilities} WMS e
-\texttt{DescribeCoverage} WCS. Raccoglie servizi, layer e sotto-layer,
-coverage ed estensioni temporali. Queste descrizioni consentono di verificare
-se una risorsa sia compatibile con tema e periodo richiesti senza scaricare
-ogni mappa o raster. Il percorso non usa \texttt{GetCoverage}; riguarda le
-coverage previste dal catalogo applicativo e non costituisce un censimento
-universale di tutte le risorse sulla siccità.
+Il collector Drought interroga le descrizioni standard dei servizi cartografici
+WMS e WCS. Raccoglie servizi, layer e sotto-layer, coverage ed estensioni
+temporali. Queste descrizioni consentono di verificare se una risorsa sia
+compatibile con tema e periodo richiesti senza scaricare mappe o raster. Il
+censimento copre le coverage previste dal catalogo applicativo.
 
 \subsection{Due usi distinti di STAC}
 
 L'harvester CDSE salva root del catalogo, collezioni, campi interrogabili e,
 quando previsto, item e riferimenti agli asset. La finestra recente
-predefinita per gli item è di due giorni, con limiti configurabili. La
-persistenza di un collegamento a un asset non comporta il download del file.
+predefinita per gli item è di due giorni, con limiti configurabili. Degli asset
+si conservano i collegamenti, mentre i file restano sul servizio remoto.
 
 Nella Discovery l'agente legge questi metadati da NebulaGraph; nel percorso
-operativo il client interroga CDSE STAC per cercare acquisizioni. I risultati
-operativi non devono quindi essere interpretati come una semplice vista degli
-item già presenti nel grafo. Aggiornamento del catalogo locale e disponibilità
-del servizio remoto sono proprietà separate.
+operativo il client interroga direttamente CDSE STAC per cercare acquisizioni.
+I due percorsi sono indipendenti: i risultati operativi riflettono lo stato
+attuale del servizio remoto, mentre il grafo riflette l'ultimo aggiornamento
+del catalogo locale.
 
 \section{Confronto e complementarità}
 
@@ -266,15 +254,13 @@ ricerca web aggiunge infine contesto recente e fonti narrative.
 \section{Implicazioni per la progettazione dell'agente}
 
 I server MCP e il client STAC convertono feed XML, risposte STAC e record CEMS
-in dataset con campi stabili. In questo modo i client possono essere provati senza
-coinvolgere il modello, i rami indipendenti possono procedere in parallelo e il
-fallimento di una sorgente non cancella i risultati già disponibili.
+in dataset con campi stabili. In questo modo i client possono essere provati
+separatamente dal modello, i rami indipendenti possono procedere in parallelo e
+il guasto di una sorgente lascia intatti i risultati già disponibili.
 
-La normalizzazione non rende equivalenti le fonti. Il workflow conserva
-semantica e provenienza di ogni record anche quando GDACS, CDSE/STAC e CEMS sono
-interrogati nello stesso turno. Su questa separazione si basa l'architettura del
-capitolo successivo.
-
-Anche la rappresentazione comune nel grafo preserva le differenze tra dataset,
-variabile, collezione e layer. Una risorsa scoperta indica quali dati potrebbero
-sostenere uno studio; non è già il risultato scientifico di quello studio.
+Il workflow conserva semantica e provenienza di ogni record anche quando GDACS,
+CDSE/STAC e CEMS sono interrogati nello stesso turno. Allo stesso modo, il grafo
+mantiene distinti dataset, variabile, collezione e layer: una risorsa scoperta
+indica quali dati potrebbero sostenere uno studio, il cui risultato richiede poi
+un'analisi dedicata. Su questa separazione si basa l'architettura del capitolo
+successivo.

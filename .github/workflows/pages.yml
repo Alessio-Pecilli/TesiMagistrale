@@ -1,0 +1,49 @@
+# Pubblica il PDF della tesi su GitHub Pages a ogni push su main.
+name: Pubblica tesi
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepara il sito
+        run: |
+          mkdir site
+          cp main.pdf site/tesi.pdf
+          cat > site/index.html <<'EOF'
+          <!doctype html>
+          <html lang="it">
+          <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1">
+            <meta http-equiv="refresh" content="0; url=tesi.pdf">
+            <title>Tesi di Alessio Pecilli</title>
+          </head>
+          <body>
+            <p><a href="tesi.pdf">Apri la tesi (PDF)</a></p>
+          </body>
+          </html>
+          EOF
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+      - id: deployment
+        uses: actions/deploy-pages@v4

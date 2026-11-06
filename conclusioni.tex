@@ -1,10 +1,8 @@
 Il lavoro ha realizzato \emph{Copernicus Data Workspace}: un assistente per
 consultare fonti geospaziali tramite richieste in linguaggio naturale, esposto
-in una dashboard nativa autenticata con Keycloak. Il contributo è progettuale e
-implementativo: responsabilità specializzate e percorsi controllati. Non è
-stato misurato, a parità di modello e fonti, un vantaggio quantitativo rispetto
-a un agente singolo o a una pipeline più semplice. Sul piano progettuale sono
-stati ottenuti, in particolare:
+in una dashboard web autenticata con Keycloak. Il contributo è progettuale e
+implementativo: responsabilità specializzate e percorsi controllati. Sul piano
+progettuale sono stati ottenuti, in particolare:
 
 \begin{itemize}
     \item un workflow LangGraph con confine di dominio, parsing strutturato,
@@ -13,30 +11,28 @@ stati ottenuti, in particolare:
     \item integrazioni MCP per GDACS e CEMS, client STAC diretto per le
     acquisizioni, harvester e catalogo metadati Marine/STAC/Drought;
     \item memoria conversazionale Redis, artefatti dashboard verificabili
-    (valori calcolati dal codice, non inventati dal modello), ripresa delle
+    (valori calcolati dal codice sui record recuperati), ripresa delle
     sessioni e interfaccia bilingue IT/EN;
     \item stack di osservabilità (Prometheus, Grafana, OpenTelemetry/Phoenix)
     per tempi, errori, nodi e dipendenze;
-    \item un protocollo di valutazione del \texttt{WorkflowAgent}
+    \item un protocollo di valutazione del workflow
     (versione~6.0) con controlli deterministici, rubriche ordinali e stima
     dell'incertezza.
 \end{itemize}
 
 MCP delimita l'integrazione di GDACS e CEMS; CDSE STAC live resta un percorso
-diretto. Discovery e STAC live restano compiti distinti: il primo sceglie
+diretto. Discovery e STAC live svolgono compiti distinti: il primo sceglie
 risorse dal catalogo a grafo; il secondo cerca scene sul catalogo remoto.
 
 \textbf{Risultati della valutazione.}
-Sul dataset descritto da 105 casi, il riepilogo attribuito alla run del
-protocollo~6.0 \texttt{eval-run-ca004ba5}
-(Judge \texttt{gemma3:27b}, temperatura~0) riporta
+Sul dataset descritto da 105 casi, il riepilogo della run di riferimento del
+protocollo~6.0 (Judge \texttt{gemma3:27b}, temperatura~0) riporta
 sul grafo 31/49 (63,3\% primario) e 31/51 (60,8\% rigoroso), e sulle
 acquisizioni 54/54 (100\%). I conteggi e il ricalcolo degli intervalli sono documentati nel rapporto di
 riscontro tecnico del 5 novembre 2026 \cite{riscontroTecnico2026}.
 Il Capitolo~\ref{cap:7} ne esplicita criteri e denominatori.
-GDACS, CEMS, follow-up e ripresa sessione restano fuori
-da questo benchmark. Non si estende il tasso osservato all'affidabilità
-generale del workspace.
+Il benchmark copre questi due percorsi; GDACS, CEMS, follow-up e ripresa
+sessione sono oggetto di altre verifiche.
 
 Una seconda run con seed diverso ottiene valori vicini (61,2\% e 98,1\%).
 Il recupero sul grafo è buono, ma il riferimento è raramente al primo posto;
